@@ -16,7 +16,7 @@ import {
 export const statusVideosRouter = Router();
 statusVideosRouter.use(requireAuth, requireTenant);
 
-const recorderRoles = ["OWNER", "STAFF", "GUARD", "STUDENT"] as const;
+const recorderRoles = ["OWNER", "STAFF", "GUARD"] as const;
 const viewerRoles = ["OWNER", "STAFF", "GUARD", "STUDENT", "PARENT"] as const;
 const directionEnum = z.enum(["CHECK_IN", "CHECK_OUT"]);
 
@@ -29,9 +29,6 @@ const studentSelect = {
 
 async function resolveStudent(req: Request, explicitId?: string) {
   const tenantId = req.user!.tenantId!;
-  if (req.user!.role === "STUDENT") {
-    return getStudentForUser(req.user!.sub);
-  }
   if (!explicitId) return null;
   return prisma.student.findFirst({ where: { id: explicitId, tenantId } });
 }
@@ -105,8 +102,8 @@ statusVideosRouter.post("/", requireRole(...recorderRoles), async (req, res, nex
           tenantId,
           studentId: student.id,
           type: body.direction,
-          method: req.user!.role === "STUDENT" ? "BUTTON" : "STAFF_MANUAL",
-          recordedById: req.user!.role === "STUDENT" ? null : req.user!.sub,
+          method: "STAFF_MANUAL",
+          recordedById: req.user!.sub,
         },
       });
       const video = await tx.studentStatusVideo.create({

@@ -33,7 +33,7 @@ function VideosView() {
   const router = useRouter();
   const { user } = useAuth();
   const role = user?.role;
-  const canRecord = role === "OWNER" || role === "STAFF" || role === "GUARD" || role === "STUDENT";
+  const canRecord = role === "OWNER" || role === "STAFF" || role === "GUARD";
   const isStaff = role === "OWNER" || role === "STAFF" || role === "GUARD";
 
   const { data, loading, error, reload } = useApi<{ videos: StatusVideo[] }>("/status-videos");

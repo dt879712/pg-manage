@@ -52,35 +52,11 @@ export function StudentHome({ name }: { name: string }) {
       </Card>
 
       <Card style={{ gap: space(2) }}>
-        <Text style={{ fontWeight: "700", color: colors.text }}>Record a 15s video</Text>
+        <Text style={{ fontWeight: "700", color: colors.text }}>Check-in/out videos</Text>
         <Muted>
-          Record a short live video when you leave or return. The PG owner, staff and your parents
-          can see it. Your previous clip is deleted automatically.
+          The gate guard records a 15-second video when you enter or leave the PG. Your parents can
+          watch it too. The previous clip is replaced automatically.
         </Muted>
-        <Row style={{ gap: space(3) }}>
-          <View style={{ flex: 1 }}>
-            <Button
-              label="Check in"
-              icon="enter-outline"
-              variant={!isIn ? "success" : "ghost"}
-              disabled={att.loading || isIn}
-              onPress={() =>
-                router.push({ pathname: "/status-video/record", params: { direction: "CHECK_IN" } })
-              }
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Button
-              label="Check out"
-              icon="exit-outline"
-              variant={isIn ? "success" : "ghost"}
-              disabled={att.loading || !isIn}
-              onPress={() =>
-                router.push({ pathname: "/status-video/record", params: { direction: "CHECK_OUT" } })
-              }
-            />
-          </View>
-        </Row>
       </Card>
 
       <Row style={{ gap: space(3) }}>
