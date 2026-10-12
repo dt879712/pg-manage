@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "373291597395",
+    "project_id": "dev-hostel-d7b4e",
+    "storage_bucket": "dev-hostel-d7b4e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:373291597395:android:c1470b679dd8e3bcc690a6",
+        "android_client_info": {
+          "package_name": "com.pgmanage.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCamg8K2RxnsVNwwUHFNP-_tIEBS6jdLnc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

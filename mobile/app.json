@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "Dev Hostel",
+    "slug": "dev-hostel",
+    "scheme": "devhostel",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pgmanage.app"
+    },
+    "android": {
+      "package": "com.pgmanage.app",
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "backgroundColor": "#4F46E5",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "./plugins/with-upi-queries",
+      "./plugins/with-cleartext-traffic",
+      "expo-notifications",
+      "expo-video",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Dev Hostel to access your camera to record 15-second check-in/out videos.",
+          "microphonePermission": "Allow Dev Hostel to access your microphone while recording check-in/out videos.",
+          "recordAudioAndroid": true
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d0a5dde4-7240-4503-a4c6-6939cbddb870"
+      }
+    },
+    "owner": "dev-hostel"
+  }
+}

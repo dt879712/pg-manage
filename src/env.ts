@@ -1,0 +1,43 @@
+import "dotenv/config";
+
+function required(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing required env var: ${name}`);
+  return value;
+}
+
+export const env = {
+  databaseUrl: required("DATABASE_URL"),
+  jwtSecret: required("JWT_SECRET"),
+  port: Number(process.env.PORT ?? 4000),
+  // Free email service via SMTP (e.g. Gmail app password). If SMTP_USER/PASS are
+  // empty, reset links are shown on screen / logged instead of emailed.
+  smtpHost: process.env.SMTP_HOST ?? "",
+  smtpPort: Number(process.env.SMTP_PORT ?? 587),
+  smtpUser: process.env.SMTP_USER ?? "",
+  smtpPass: process.env.SMTP_PASS ?? "",
+  brevoApiKey: process.env.BREVO_API_KEY ?? "",
+  expoAccessToken: process.env.EXPO_ACCESS_TOKEN ?? "",
+  mailFrom: process.env.MAIL_FROM ?? "Dev Hostel <no-reply@devhostel.app>",
+  resetUrlBase: process.env.RESET_URL_BASE ?? "http://localhost:8083",
+  // Cloudflare R2 (S3-compatible) storage — optional fallback provider.
+  r2AccountId: process.env.R2_ACCOUNT_ID ?? "",
+  r2AccessKeyId: process.env.R2_ACCESS_KEY_ID ?? "",
+  r2SecretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? "",
+  r2Bucket: process.env.R2_BUCKET ?? "",
+  r2Endpoint: process.env.R2_ENDPOINT ?? "",
+  // Cloudinary storage for documents, photos and status videos.
+  cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME ?? "",
+  cloudinaryApiKey: process.env.CLOUDINARY_API_KEY ?? "",
+  cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET ?? "",
+};
+
+export function r2Configured(): boolean {
+  return Boolean(
+    env.r2AccountId && env.r2AccessKeyId && env.r2SecretAccessKey && env.r2Bucket
+  );
+}
+
+export function cloudinaryConfigured(): boolean {
+  return Boolean(env.cloudinaryCloudName && env.cloudinaryApiKey && env.cloudinaryApiSecret);
+}

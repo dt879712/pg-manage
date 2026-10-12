@@ -1,0 +1,355 @@
+import { useState } from "react";
+import {
+  FlatList,
+  Image,
+  Modal,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import {
+  Badge,
+  Button,
+  Card,
+  Empty,
+  ErrorText,
+  Loading,
+  Muted,
+  Row,
+  rowCard,
+  SectionTitle,
+  statusTone,
+} from "@/components/ui";
+import { DesktopShell } from "@/components/shell";
+import { approveAdmission, rejectAdmission } from "@/lib/endpoints";
+import { fullName, shortDate } from "@/lib/format";
+import { radius, space } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
+import type { Admission, Room } from "@/lib/types";
+import { useApi } from "@/lib/useApi";
+
+function AdmissionsView() {
+  const { colors } = useTheme();
+  const [filter, setFilter] = useState<"PENDING" | "ALL">("PENDING");
+  const path = filter === "PENDING" ? "/admissions?status=PENDING" : "/admissions";
+  const { data, loading, error, reload } = useApi<{ admissions: Admission[] }>(path);
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <View
+        style={{
+          padding: space(4),
+          gap: space(3),
+          width: "100%",
+          maxWidth: 720,
+          alignSelf: "center",
+        }}
+      >
+        <Row style={{ gap: space(2) }}>
+          <Button
+            label="Pending"
+            variant={filter === "PENDING" ? "primary" : "ghost"}
+            onPress={() => setFilter("PENDING")}
+          />
+          <Button
+            label="All"
+            variant={filter === "ALL" ? "primary" : "ghost"}
+            onPress={() => setFilter("ALL")}
+          />
+          <Muted style={{ marginLeft: "auto" }}>{data?.admissions.length ?? 0} application(s)</Muted>
+        </Row>
+        <ErrorText>{error}</ErrorText>
+      </View>
+      {loading ? (
+        <Loading />
+      ) : (
+        <FlatList
+          data={data?.admissions ?? []}
+          keyExtractor={(a) => a.id}
+          refreshControl={<RefreshControl refreshing={false} onRefresh={reload} />}
+          contentContainerStyle={{
+            paddingHorizontal: space(4),
+            paddingBottom: space(4),
+            gap: space(3),
+            width: "100%",
+            maxWidth: 720,
+            alignSelf: "center",
+          }}
+          ListEmptyComponent={<Empty text="No admission requests" icon="document-text-outline" />}
+          renderItem={({ item }) => (
+            <Pressable
+              onPress={() => setOpenId(item.id)}
+              style={({ pressed }) => [rowCard(colors.card, colors.border), { opacity: pressed ? 0.85 : 1 }]}
+            >
+              <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                <Text numberOfLines={1} style={{ fontWeight: "700", color: colors.text, fontSize: 15 }}>
+                  {fullName(item.firstName, item.lastName)}
+                </Text>
+                <Muted numberOfLines={1}>
+                  {item.phone} · {shortDate(item.createdAt)}
+                </Muted>
+              </View>
+              {item.room?.roomNumber ? (
+                <View style={{ minWidth: 96 }}>
+                  <Text numberOfLines={1} style={{ fontSize: 13, color: colors.muted }}>
+                    Room {item.room.roomNumber}
+                  </Text>
+                </View>
+              ) : null}
+              <Badge label={item.status} tone={statusTone(item.status)} />
+            </Pressable>
+          )}
+        />
+      )}
+
+      {openId ? (
+        <AdmissionDetail
+          id={openId}
+          onClose={() => setOpenId(null)}
+          onDone={() => {
+            setOpenId(null);
+            reload();
+          }}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+function AdmissionDetail({
+  id,
+  onClose,
+  onDone,
+}: {
+  id: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { colors } = useTheme();
+  const { data, loading, error, reload } = useApi<{ admission: Admission }>(`/admissions/${id}`);
+  const { data: roomsData } = useApi<{ rooms: Room[] }>("/rooms");
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const [bedId, setBedId] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState<null | "approve" | "reject">(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const admission = data?.admission;
+  const rooms = roomsData?.rooms ?? [];
+  const selectedRoom = rooms.find((r) => r.id === roomId);
+  const beds = selectedRoom?.beds ?? [];
+
+  const approve = async () => {
+    setBusy("approve");
+    setErr(null);
+    try {
+      await approveAdmission(id, { roomId: roomId ?? undefined, bedId: bedId ?? undefined });
+      onDone();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to approve");
+      setBusy(null);
+    }
+  };
+
+  const reject = async () => {
+    setBusy("reject");
+    setErr(null);
+    try {
+      await rejectAdmission(id, reason.trim() || undefined);
+      onDone();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to reject");
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Modal visible animationType="slide" onRequestClose={onClose}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: colors.bg }}
+        contentContainerStyle={{ padding: space(4), gap: space(4), paddingBottom: space(12), alignItems: "center" }}
+      >
+        <View style={{ width: "100%", maxWidth: 560, gap: space(4) }}>
+        {loading ? (
+          <Loading />
+        ) : error || !admission ? (
+          <>
+            <ErrorText>{error ?? "Not found"}</ErrorText>
+            <Button label="Close" variant="ghost" onPress={onClose} />
+          </>
+        ) : (
+          <>
+            <Card style={{ gap: space(2) }}>
+              <Row between>
+                <Text style={{ fontWeight: "800", fontSize: 18, color: colors.text }}>
+                  {fullName(admission.firstName, admission.lastName)}
+                </Text>
+                <Badge label={admission.status} tone={statusTone(admission.status)} />
+              </Row>
+              <Detail label="Phone" value={admission.phone} />
+              <Detail label="Email" value={admission.email} />
+              {admission.gender ? <Detail label="Gender" value={admission.gender} /> : null}
+              {admission.course ? <Detail label="Course" value={admission.course} /> : null}
+              {admission.college ? <Detail label="College" value={admission.college} /> : null}
+              {admission.address ? <Detail label="Address" value={admission.address} /> : null}
+              {admission.guardianName ? <Detail label="Guardian" value={admission.guardianName} /> : null}
+              {admission.guardianPhone ? <Detail label="Guardian phone" value={admission.guardianPhone} /> : null}
+              <Detail label="Submitted" value={shortDate(admission.createdAt)} />
+            </Card>
+
+            <Card style={{ gap: space(3) }}>
+              <SectionTitle>Documents</SectionTitle>
+              {admission.documents && admission.documents.length ? (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space(3) }}>
+                  {admission.documents.map((d) => (
+                    <View key={d.id} style={{ width: 96 }}>
+                      <Image
+                        source={{ uri: d.fileUrl }}
+                        style={{ width: 96, height: 96, borderRadius: radius.sm, backgroundColor: colors.cardAlt }}
+                      />
+                      <Muted numberOfLines={1} style={{ fontSize: 11, marginTop: 2 }}>
+                        {d.title || d.type}
+                      </Muted>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Muted>No documents</Muted>
+              )}
+            </Card>
+
+            {admission.status === "PENDING" ? (
+              <>
+                <Card style={{ gap: space(3) }}>
+                  <SectionTitle>Allot a room</SectionTitle>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space(2) }}>
+                    {rooms.map((r) => (
+                      <Pressable
+                        key={r.id}
+                        onPress={() => {
+                          setRoomId(r.id);
+                          setBedId(null);
+                        }}
+                        style={[
+                          chipStyle,
+                          { borderColor: colors.border, backgroundColor: colors.bg },
+                          roomId === r.id && { backgroundColor: colors.primarySolid, borderColor: colors.primarySolid },
+                        ]}
+                      >
+                        <Text style={{ color: roomId === r.id ? colors.onPrimary : colors.text, fontWeight: "600" }}>
+                          Room {r.roomNumber}
+                        </Text>
+                      </Pressable>
+                    ))}
+                    {rooms.length === 0 ? <Muted>No rooms yet — create a room first</Muted> : null}
+                  </View>
+                  {selectedRoom ? (
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space(2) }}>
+                      {beds.map((b) => {
+                        const disabled = b.status === "OCCUPIED";
+                        return (
+                          <Pressable
+                            key={b.id}
+                            disabled={disabled}
+                            onPress={() => setBedId((cur) => (cur === b.id ? null : b.id))}
+                            style={[
+                              chipStyle,
+                              { borderColor: colors.border, backgroundColor: colors.bg },
+                              bedId === b.id && { backgroundColor: colors.primarySolid, borderColor: colors.primarySolid },
+                              disabled && { opacity: 0.4 },
+                            ]}
+                          >
+                            <Text style={{ color: bedId === b.id ? colors.onPrimary : colors.text, fontWeight: "600" }}>
+                              {b.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                      {beds.length === 0 ? <Muted>No beds in this room (can still allot the room)</Muted> : null}
+                    </View>
+                  ) : null}
+                  <Muted style={{ fontSize: 12 }}>
+                    Room only = allot whole room; pick a bed for shared rooms. Student gets notified on approval.
+                  </Muted>
+                </Card>
+
+                <ErrorText>{err}</ErrorText>
+                <Button label="Approve & activate student" loading={busy === "approve"} onPress={approve} />
+
+                <Card style={{ gap: space(3) }}>
+                  <SectionTitle>Reject</SectionTitle>
+                  <TextInput
+                    value={reason}
+                    onChangeText={setReason}
+                    placeholder="Reason (optional, shared with the student)"
+                    placeholderTextColor={colors.muted}
+                    style={[
+                      inputStyle,
+                      { borderColor: colors.border, color: colors.text, backgroundColor: colors.bg },
+                    ]}
+                  />
+                  <Button label="Reject application" variant="danger" loading={busy === "reject"} onPress={reject} />
+                </Card>
+              </>
+            ) : (
+              <Card style={{ gap: space(2) }}>
+                <SectionTitle>Decision</SectionTitle>
+                <Detail
+                  label="Room"
+                  value={admission.room?.roomNumber ? `Room ${admission.room.roomNumber}` : "—"}
+                />
+                {admission.bed?.label ? <Detail label="Bed" value={admission.bed.label} /> : null}
+                {admission.rejectionReason ? (
+                  <Detail label="Reason" value={admission.rejectionReason} />
+                ) : null}
+              </Card>
+            )}
+
+            <Row style={{ gap: space(3) }}>
+              <Button label="Refresh" variant="ghost" onPress={reload} />
+              <Button label="Close" variant="ghost" onPress={onClose} />
+            </Row>
+          </>
+        )}
+        </View>
+      </ScrollView>
+    </Modal>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flexDirection: "row", gap: space(2), alignItems: "flex-start" }}>
+      <Text style={{ color: colors.muted, fontSize: 13, width: 108 }}>{label}</Text>
+      <Text style={{ color: colors.text, fontSize: 14, flex: 1 }}>{value}</Text>
+    </View>
+  );
+}
+
+export default function Admissions() {
+  return (
+    <DesktopShell>
+      <AdmissionsView />
+    </DesktopShell>
+  );
+}
+
+const chipStyle = {
+  borderWidth: 1,
+  borderRadius: radius.sm,
+  paddingHorizontal: space(3),
+  paddingVertical: space(2),
+};
+
+const inputStyle = {
+  borderWidth: 1,
+  borderRadius: radius.sm,
+  paddingHorizontal: space(3),
+  paddingVertical: space(3),
+  fontSize: 15,
+};

@@ -1,0 +1,97 @@
+import { ScrollView, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { Button, Card, ErrorText, Hero, Muted, Row, Skeleton } from "@/components/ui";
+import { AnnouncementsCard, TenantBanner } from "@/components/branding";
+import { greeting, timeOf } from "@/lib/format";
+import { space } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
+import type { Attendance } from "@/lib/types";
+import { useApi } from "@/lib/useApi";
+import { useRefreshOnFocus } from "@/lib/useRefreshOnFocus";
+
+export function StudentHome({ name }: { name: string }) {
+  const { colors } = useTheme();
+  const router = useRouter();
+  const att = useApi<{ records: Attendance[] }>("/attendance?take=1");
+  useRefreshOnFocus(att.reload);
+
+  const latest = att.data?.records?.[0];
+  const isIn = latest?.type === "CHECK_IN";
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: space(4), gap: space(4) }}>
+      <View>
+        <Hero eyebrow={greeting()} title={name} subtitle="Your attendance for today" />
+      </View>
+      <TenantBanner />
+      <ErrorText>{att.error}</ErrorText>
+
+      <Card style={{ gap: space(3), alignItems: "center" }}>
+        {att.loading ? <Skeleton width={120} height={120} radius={60} /> : null}
+        {!att.loading ? (
+          <>
+            <Text style={{ fontSize: 40 }}>{isIn ? "🟢" : "⚪"}</Text>
+            {latest ? (
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: "800",
+                  color: isIn ? colors.success : colors.muted,
+                }}
+              >
+                {isIn ? "Currently IN" : "Currently OUT"}
+              </Text>
+            ) : (
+              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.text }}>
+                No check-ins yet
+              </Text>
+            )}
+            {latest ? <Muted>Last update · {timeOf(latest.at)}</Muted> : null}
+          </>
+        ) : null}
+      </Card>
+
+      <Card style={{ gap: space(2) }}>
+        <Text style={{ fontWeight: "700", color: colors.text }}>Record a 15s video</Text>
+        <Muted>
+          Record a short live video when you leave or return. The PG owner, staff and your parents
+          can see it. Your previous clip is deleted automatically.
+        </Muted>
+        <Row style={{ gap: space(3) }}>
+          <View style={{ flex: 1 }}>
+            <Button
+              label="Check in"
+              icon="enter-outline"
+              variant={!isIn ? "success" : "ghost"}
+              disabled={att.loading || isIn}
+              onPress={() =>
+                router.push({ pathname: "/status-video/record", params: { direction: "CHECK_IN" } })
+              }
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button
+              label="Check out"
+              icon="exit-outline"
+              variant={isIn ? "success" : "ghost"}
+              disabled={att.loading || !isIn}
+              onPress={() =>
+                router.push({ pathname: "/status-video/record", params: { direction: "CHECK_OUT" } })
+              }
+            />
+          </View>
+        </Row>
+      </Card>
+
+      <Row style={{ gap: space(3) }}>
+        <View style={{ flex: 1 }}>
+          <Button label="My videos" icon="videocam-outline" variant="ghost" onPress={() => router.push("/status-videos")} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Button label="Message owner" icon="chatbubble-outline" variant="ghost" onPress={() => router.push("/message/new")} />
+        </View>
+      </Row>
+      <AnnouncementsCard />
+    </ScrollView>
+  );
+}
