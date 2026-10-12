@@ -1,11 +1,12 @@
 import { ScrollView, Text, View } from "react-native";
 import { useRouter } from "expo-router";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { Badge, Button, Card, ErrorText, Hero, Muted, Row, Skeleton, SkeletonRows, statusTone } from "@/components/ui";
 import { AnnouncementsCard, TenantBanner } from "@/components/branding";
 import { money, shortDate, timeOf, greeting } from "@/lib/format";
-import { space } from "@/lib/theme";
+import { radius, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
-import type { Attendance, Invoice, TenantBranding } from "@/lib/types";
+import type { Attendance, Invoice, StatusVideo, TenantBranding } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
 import { useRefreshOnFocus } from "@/lib/useRefreshOnFocus";
 
@@ -74,16 +75,62 @@ export function ParentHome({ name }: { name: string }) {
           ))}
         {!invoices.loading && list.length === 0 ? <Muted>No invoices yet</Muted> : null}
       </Card>
+      <LatestVideoCard />
       <Row style={{ gap: space(3) }}>
-        <View style={{ flex: 1 }}>
-          <Button label="Check-in videos" icon="videocam-outline" onPress={() => router.push("/status-videos")} />
-        </View>
         <View style={{ flex: 1 }}>
           <Button label="Message owner" variant="ghost" icon="chatbubble-outline" onPress={() => router.push("/message/new")} />
         </View>
+        <View style={{ flex: 1 }}>
+          <Button label="My messages" variant="ghost" icon="chatbubbles-outline" onPress={() => router.push("/messages")} />
+        </View>
       </Row>
-      <Button label="My messages" variant="ghost" onPress={() => router.push("/messages")} />
       <AnnouncementsCard />
     </ScrollView>
+  );
+}
+
+function LatestVideoCard() {
+  const { colors } = useTheme();
+  const videos = useApi<{ videos: StatusVideo[] }>("/status-videos");
+  useRefreshOnFocus(videos.reload);
+
+  const video = videos.data?.videos?.[0];
+  const player = useVideoPlayer(video?.url ?? null, (p) => {
+    p.loop = true;
+    p.muted = true;
+    p.play();
+  });
+
+  return (
+    <Card style={{ gap: space(2) }}>
+      <Row between>
+        <Text style={{ fontWeight: "700", color: colors.text }}>Latest check-in video</Text>
+        {video ? (
+          <Badge
+            label={video.direction === "CHECK_IN" ? "In" : "Out"}
+            tone={video.direction === "CHECK_IN" ? "success" : "warning"}
+          />
+        ) : null}
+      </Row>
+      <ErrorText>{videos.error}</ErrorText>
+      {videos.loading ? <Skeleton height={240} /> : null}
+      {!videos.loading && !video ? <Muted>No check-in video yet.</Muted> : null}
+      {!videos.loading && video?.url ? (
+        <>
+          <VideoView
+            player={player}
+            style={{ width: "100%", aspectRatio: 3 / 4, borderRadius: radius.lg, backgroundColor: "#000" }}
+            contentFit="contain"
+            surfaceType="textureView"
+          />
+          <Muted style={{ fontSize: 12 }}>
+            {video.direction === "CHECK_IN" ? "Checked in" : "Checked out"} · {timeOf(video.createdAt)}
+          </Muted>
+        </>
+      ) : null}
+      {!videos.loading && video && !video.url ? (
+        <Muted>Video is not available right now.</Muted>
+      ) : null}
+    </Card>
   );
 }
