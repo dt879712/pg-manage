@@ -1,9 +1,6 @@
 import { useState } from "react";
-import { Alert, Platform, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, ScrollView, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { EncodingType, File, Paths } from "expo-file-system";
-import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
 import { Badge, Button, Card, ErrorText, Loading, Muted, Row, statusTone } from "@/components/ui";
 import { Avatar, DocumentGallery } from "@/components/documents";
 import { api } from "@/lib/api";
@@ -16,7 +13,7 @@ import {
 } from "@/lib/endpoints";
 import { chooseImage } from "@/lib/images";
 import { fullName, money, shortDate } from "@/lib/format";
-import { studentFormHtml } from "@/lib/studentForm";
+import { exportPdf, studentFormHtml } from "@/lib/formPdf";
 import { radius, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import type { DocumentFile, StudentDetail, TenantBranding } from "@/lib/types";
@@ -107,25 +104,13 @@ export default function StudentDetailScreen() {
     setErr(null);
     try {
       const t = tenantData?.tenant;
-      const documents = [
-        ...(s.documents ?? []).map((d) => ({ title: d.title || d.type, url: d.fileUrl })),
-        ...(s.admissionRequest?.documents ?? []).map((d) => ({
-          title: d.title || `Form ${d.type}`,
-          url: d.fileUrl,
-        })),
-        ...(s.parents ?? []).flatMap((l) =>
-          (l.parent.documents ?? []).map((d) => ({
-            title: `${l.parent.name} · ${d.title || d.type}`,
-            url: d.fileUrl,
-          }))
-        ),
-      ];
       const html = studentFormHtml({
         pgName: t?.name,
         logoUrl: t?.logoUrl,
         student: {
           firstName: s.firstName,
           lastName: s.lastName,
+          photoUrl: s.photoUrl,
           gender: s.gender,
           dob: s.dob,
           phone: s.phone,
@@ -152,38 +137,33 @@ export default function StudentDetailScreen() {
           relation: l.relation,
           phone: l.parent.phone,
           email: l.parent.email,
+          photoUrl: l.parent.photoUrl,
           isSuperParent: l.parent.isSuperParent,
         })),
-        documents,
+        documents: [
+          {
+            heading: "Student documents",
+            items: (s.documents ?? []).map((d) => ({ title: d.title || d.type, url: d.fileUrl })),
+          },
+          {
+            heading: "Admission form",
+            items: (s.admissionRequest?.documents ?? []).map((d) => ({
+              title: d.title || `Form ${d.type}`,
+              url: d.fileUrl,
+            })),
+          },
+          ...(s.parents ?? []).map((l) => ({
+            heading: `${l.parent.name}${l.relation ? ` (${l.relation})` : ""}`,
+            items: (l.parent.documents ?? []).map((d) => ({
+              title: d.title || d.type,
+              url: d.fileUrl,
+            })),
+          })),
+        ],
         generatedAt: new Date().toLocaleString("en-IN"),
       });
 
-      if (Platform.OS === "web") {
-        const w = window.open("", "_blank");
-        if (w) {
-          w.document.open();
-          w.document.write(html);
-          w.document.close();
-        }
-        return;
-      }
-
-      const { uri, base64 } = await Print.printToFileAsync({ html, base64: true });
-      let pdfUri = uri;
-      if (base64) {
-        const target = new File(Paths.cache, "student-form.pdf");
-        if (target.exists) target.delete();
-        target.create();
-        target.write(base64, { encoding: EncodingType.Base64 });
-        pdfUri = target.uri;
-      }
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(pdfUri, {
-          mimeType: "application/pdf",
-          dialogTitle: "Save student form",
-          UTI: "com.adobe.pdf",
-        });
-      }
+      await exportPdf(html, "student-form.pdf");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to build PDF");
     } finally {
@@ -235,7 +215,10 @@ export default function StudentDetailScreen() {
 
       <Card style={{ gap: space(3) }}>
         <Text style={{ fontWeight: "700", color: colors.text }}>Admission form</Text>
-        <Muted>Filled form with student &amp; parent documents, exported as PDF.</Muted>
+        <Muted>
+          Filled form with the student photo and student, parent &amp; form documents, exported as
+          PDF.
+        </Muted>
         {(s.parents ?? []).length === 0 ? <Muted>No parents linked</Muted> : null}
         {(s.parents ?? []).map((l) => (
           <Row key={l.id} between>

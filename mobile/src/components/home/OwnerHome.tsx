@@ -15,19 +15,12 @@ import {
 } from "@/components/ui";
 import { AnnouncementsCard, TenantBanner } from "@/components/branding";
 import { useAuth } from "@/lib/auth";
-import { money, shortDate } from "@/lib/format";
+import { greeting, money, shortDate } from "@/lib/format";
 import { space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import type { Invoice, Room, Student } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
 import { useRefreshOnFocus } from "@/lib/useRefreshOnFocus";
-
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
-}
 
 export function OwnerHome() {
   const { colors } = useTheme();

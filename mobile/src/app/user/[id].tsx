@@ -10,10 +10,11 @@ import {
   updateUser,
   uploadDocument,
 } from "@/lib/endpoints";
+import { exportPdf, profileFormHtml } from "@/lib/formPdf";
 import { chooseImage } from "@/lib/images";
 import { radius, roleLabels, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
-import type { DocumentFile, Role, UserDetail } from "@/lib/types";
+import type { DocumentFile, Role, TenantBranding, UserDetail } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
 
 const roleTone: Record<Role, Tone> = {
@@ -28,12 +29,54 @@ export default function UserDetailScreen() {
   const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, loading, error, reload } = useApi<{ user: UserDetail }>(`/users/${id}`);
+  const { data: tenantData } = useApi<{ tenant: TenantBranding }>("/tenant");
   const [busy, setBusy] = useState(false);
+  const [formBusy, setFormBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   if (loading) return <Loading />;
   const u = data?.user;
   if (!u) return <ErrorText>{error || "Not found"}</ErrorText>;
+
+  const exportProfile = async () => {
+    setFormBusy(true);
+    setErr(null);
+    try {
+      const t = tenantData?.tenant;
+      const html = profileFormHtml({
+        pgName: t?.name,
+        logoUrl: t?.logoUrl,
+        roleLabel: roleLabels[u.role] ?? u.role,
+        user: {
+          name: u.name,
+          email: u.email,
+          phone: u.phone,
+          photoUrl: u.photoUrl,
+          isActive: u.isActive,
+          rule:
+            u.role === "PARENT"
+              ? u.isSuperParent === true
+                ? "Super"
+                : u.isSuperParent === false
+                  ? "Normal"
+                  : "Auto"
+              : null,
+        },
+        documents: [
+          {
+            heading: "Documents",
+            items: (u.documents ?? []).map((d) => ({ title: d.title || d.type, url: d.fileUrl })),
+          },
+        ],
+        generatedAt: new Date().toLocaleString("en-IN"),
+      });
+      await exportPdf(html, `${u.name.replace(/\s+/g, "-").toLowerCase()}-profile.pdf`);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to build PDF");
+    } finally {
+      setFormBusy(false);
+    }
+  };
 
   const setPhoto = async () => {
     const picked = await chooseImage("Profile photo");
@@ -77,6 +120,12 @@ export default function UserDetailScreen() {
           loading={busy}
           onPress={setPhoto}
         />
+      </Card>
+
+      <Card style={{ gap: space(3) }}>
+        <Text style={{ fontWeight: "700", color: colors.text }}>Profile form</Text>
+        <Muted>Photo, details and documents as a PDF.</Muted>
+        <Button label="Download profile (PDF)" loading={formBusy} onPress={exportProfile} />
       </Card>
 
       {u.role === "PARENT" ? (
