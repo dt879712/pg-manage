@@ -1,10 +1,12 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useCallback, useEffect, useRef } from "react";
 import { ScrollView, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { Badge, Button, Card, ErrorText, Hero, Muted, Row, Skeleton, SkeletonRows, statusTone } from "@/components/ui";
 import { AnnouncementsCard, TenantBanner } from "@/components/branding";
 import { money, shortDate, timeOf, greeting } from "@/lib/format";
-import { radius, space } from "@/lib/theme";
+import { space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import type { Attendance, Invoice, StatusVideo, TenantBranding } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
@@ -89,44 +91,102 @@ export function ParentHome({ name }: { name: string }) {
   );
 }
 
+const RING_SIZE = 208;
+
 function LatestVideoCard() {
   const { colors } = useTheme();
   const videos = useApi<{ videos: StatusVideo[] }>("/status-videos");
   useRefreshOnFocus(videos.reload);
 
+  // Keep the screen current: a fresh clip should appear on its own, no pull-to-refresh.
+  const { reload } = videos;
+  useFocusEffect(
+    useCallback(() => {
+      const timer = setInterval(reload, 10000);
+      return () => clearInterval(timer);
+    }, [reload])
+  );
+
   const video = videos.data?.videos?.[0];
-  const player = useVideoPlayer(video?.url ?? null, (p) => {
+  const player = useVideoPlayer(null, (p) => {
     p.loop = true;
     p.muted = true;
-    p.play();
   });
 
+  // The signed URL changes on every poll, so only swap the source when the clip itself changes.
+  const loadedId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!video?.url) {
+      loadedId.current = null;
+      return;
+    }
+    if (loadedId.current === video.id) return;
+    loadedId.current = video.id;
+    player
+      .replaceAsync(video.url)
+      .then(() => player.play())
+      .catch(() => {});
+  }, [video?.id, video?.url, player]);
+
+  const isIn = video?.direction === "CHECK_IN";
+  const ring = isIn ? colors.success : colors.danger;
+  const name = video?.student
+    ? [video.student.firstName, video.student.lastName].filter(Boolean).join(" ")
+    : "";
+
   return (
-    <Card style={{ gap: space(2) }}>
-      <Row between>
-        <Text style={{ fontWeight: "700", color: colors.text }}>Latest check-in video</Text>
+    <Card style={{ gap: space(3), alignItems: "center" }}>
+      <Row between style={{ width: "100%" }}>
+        <Text style={{ fontWeight: "700", color: colors.text }}>Check-in video</Text>
         {video ? (
-          <Badge
-            label={video.direction === "CHECK_IN" ? "In" : "Out"}
-            tone={video.direction === "CHECK_IN" ? "success" : "warning"}
-          />
+          <Badge label={isIn ? "In" : "Out"} tone={isIn ? "success" : "warning"} />
         ) : null}
       </Row>
       <ErrorText>{videos.error}</ErrorText>
-      {videos.loading ? <Skeleton height={240} /> : null}
-      {!videos.loading && !video ? <Muted>No check-in video yet.</Muted> : null}
-      {!videos.loading && video?.url ? (
-        <>
-          <VideoView
-            player={player}
-            style={{ width: "100%", aspectRatio: 3 / 4, borderRadius: radius.lg, backgroundColor: "#000" }}
-            contentFit="contain"
-            surfaceType="textureView"
-          />
+      {videos.loading && !video ? <Skeleton width={RING_SIZE} height={RING_SIZE} radius={RING_SIZE / 2} /> : null}
+
+      {!videos.loading || video ? (
+        <View
+          style={{
+            width: RING_SIZE,
+            height: RING_SIZE,
+            borderRadius: RING_SIZE / 2,
+            borderWidth: 4,
+            borderColor: video ? ring : colors.border,
+            overflow: "hidden",
+            backgroundColor: "#000",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {video?.url ? (
+            <VideoView
+              player={player}
+              style={{ width: RING_SIZE, height: RING_SIZE }}
+              contentFit="cover"
+              nativeControls={false}
+              surfaceType="textureView"
+            />
+          ) : (
+            <View style={{ alignItems: "center", gap: space(2) }}>
+              <Ionicons name="videocam-off-outline" color={colors.muted} size={34} />
+              <Muted style={{ fontSize: 12 }}>No video yet</Muted>
+            </View>
+          )}
+        </View>
+      ) : null}
+
+      {!videos.loading && video ? (
+        <View style={{ alignItems: "center", gap: 2 }}>
+          <Text style={{ fontWeight: "700", color: colors.text }}>
+            {isIn ? "Checked in" : "Checked out"}
+            {name ? ` · ${name}` : ""}
+          </Text>
           <Muted style={{ fontSize: 12 }}>
-            {video.direction === "CHECK_IN" ? "Checked in" : "Checked out"} · {timeOf(video.createdAt)}
+            {video.student?.room?.roomNumber ? `Room ${video.student.room.roomNumber} · ` : ""}
+            {timeOf(video.createdAt)}
           </Muted>
-        </>
+        </View>
       ) : null}
       {!videos.loading && video && !video.url ? (
         <Muted>Video is not available right now.</Muted>
