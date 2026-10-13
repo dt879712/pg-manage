@@ -1,9 +1,15 @@
+# Files NOT uploaded when running `gcloud run deploy --source .` from the repo root.
+# The backend image only needs: Dockerfile, package*.json, tsconfig.json, src/, prisma/.
 .git
+.github
 .gitignore
+.gcloudignore
 node_modules
+npm-debug.log
 dist
-*.log
-.env
-deploy.env.yaml
 mobile
-scripts
+*.md
+.env
+.env.*
+!.env.example
+*.log
