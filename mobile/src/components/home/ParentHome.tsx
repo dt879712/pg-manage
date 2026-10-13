@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useRef } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { Badge, Button, Card, ErrorText, Hero, Muted, Row, Skeleton, SkeletonRows, statusTone } from "@/components/ui";
@@ -113,6 +113,15 @@ function LatestVideoCard() {
     p.muted = true;
   });
 
+  const [muted, setMuted] = useState(true);
+  const toggleMute = useCallback(() => {
+    setMuted((m) => {
+      const next = !m;
+      player.muted = next;
+      return next;
+    });
+  }, [player]);
+
   // The signed URL changes on every poll, so only swap the source when the clip itself changes.
   const loadedId = useRef<string | null>(null);
   useEffect(() => {
@@ -146,33 +155,56 @@ function LatestVideoCard() {
       {videos.loading && !video ? <Skeleton width={RING_SIZE} height={RING_SIZE} radius={RING_SIZE / 2} /> : null}
 
       {!videos.loading || video ? (
-        <View
-          style={{
-            width: RING_SIZE,
-            height: RING_SIZE,
-            borderRadius: RING_SIZE / 2,
-            borderWidth: 4,
-            borderColor: video ? ring : colors.border,
-            overflow: "hidden",
-            backgroundColor: "#000",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
+        <View style={{ width: RING_SIZE, height: RING_SIZE }}>
+          <View
+            style={{
+              width: RING_SIZE,
+              height: RING_SIZE,
+              borderRadius: RING_SIZE / 2,
+              borderWidth: 4,
+              borderColor: video ? ring : colors.border,
+              overflow: "hidden",
+              backgroundColor: "#000",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {video?.url ? (
+              <VideoView
+                player={player}
+                style={{ width: RING_SIZE, height: RING_SIZE }}
+                contentFit="cover"
+                nativeControls={false}
+                surfaceType="textureView"
+              />
+            ) : (
+              <View style={{ alignItems: "center", gap: space(2) }}>
+                <Ionicons name="videocam-off-outline" color={colors.muted} size={34} />
+                <Muted style={{ fontSize: 12 }}>No video yet</Muted>
+              </View>
+            )}
+          </View>
           {video?.url ? (
-            <VideoView
-              player={player}
-              style={{ width: RING_SIZE, height: RING_SIZE }}
-              contentFit="cover"
-              nativeControls={false}
-              surfaceType="textureView"
-            />
-          ) : (
-            <View style={{ alignItems: "center", gap: space(2) }}>
-              <Ionicons name="videocam-off-outline" color={colors.muted} size={34} />
-              <Muted style={{ fontSize: 12 }}>No video yet</Muted>
-            </View>
-          )}
+            <Pressable
+              onPress={toggleMute}
+              hitSlop={8}
+              style={{
+                position: "absolute",
+                right: 4,
+                bottom: 4,
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: "rgba(0,0,0,0.65)",
+                borderWidth: 1,
+                borderColor: "rgba(255,255,255,0.25)",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons name={muted ? "volume-mute" : "volume-high"} color="#fff" size={20} />
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
