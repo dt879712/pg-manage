@@ -9,6 +9,7 @@ const AUDIENCES: { key: string; label: string }[] = [
   { key: "ALL", label: "Everyone" },
   { key: "STUDENTS", label: "Students" },
   { key: "PARENTS", label: "Parents" },
+  { key: "SUPER_PARENTS", label: "Super parents" },
   { key: "STAFF", label: "Staff" },
   { key: "OWNERS", label: "Owners" },
 ];
