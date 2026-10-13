@@ -20,6 +20,8 @@ export const env = {
   expoAccessToken: process.env.EXPO_ACCESS_TOKEN ?? "",
   mailFrom: process.env.MAIL_FROM ?? "Dev Hostel <no-reply@devhostel.app>",
   resetUrlBase: process.env.RESET_URL_BASE ?? "http://localhost:8083",
+  // Comma-separated allowed browser origins, or "*" for all.
+  corsOrigins: process.env.CORS_ORIGINS ?? "*",
   // Cloudinary storage for documents, photos and status videos.
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME ?? "",
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY ?? "",

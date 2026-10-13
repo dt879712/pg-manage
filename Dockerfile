@@ -20,4 +20,5 @@ ENV NODE_ENV=production
 ENV PORT=8080
 EXPOSE 8080
 
-CMD ["node", "dist/index.js"]
+# Apply pending database migrations, then start the API.
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]

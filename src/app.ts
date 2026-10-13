@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { ZodError } from "zod";
+import { env } from "./env";
 import { authRouter } from "./routes/auth";
 import { propertiesRouter } from "./routes/properties";
 import { roomsRouter, bedsRouter } from "./routes/rooms";
@@ -18,7 +19,11 @@ import { statusVideosRouter } from "./routes/statusVideos";
 
 export function createApp() {
   const app = express();
-  app.use(cors());
+  const origins = env.corsOrigins
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+  app.use(cors({ origin: origins.includes("*") ? "*" : origins }));
   app.use(express.json({ limit: "15mb" }));
 
   app.get("/health", (_req, res) => {
