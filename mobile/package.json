@@ -6,6 +6,7 @@
     "@expo/metro-runtime": "~57.0.16",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@tauri-apps/api": "^2.12.3",
     "expo": "~57.0.26",
     "expo-camera": "~57.0.6",
     "expo-clipboard": "~57.0.2",
@@ -31,6 +32,7 @@
     "react-native-webview": "^13.16.1"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.12.2",
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.2",

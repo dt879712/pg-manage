@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, loadToken, saveToken } from "./api";
+import { api, loadApiUrl, loadToken, saveToken } from "./api";
 import { syncPushToken } from "./push";
 import type { AuthUser } from "./types";
 
@@ -20,6 +20,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
+        await loadApiUrl();
         const stored = await loadToken();
         if (stored) {
           const res = await api<{ user: AuthUser }>("/auth/me");

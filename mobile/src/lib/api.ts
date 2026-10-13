@@ -2,12 +2,33 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 
 // On a physical device the dev server host (e.g. 192.168.1.5) is reused so the
-// phone can reach the backend on the same machine. Override with EXPO_PUBLIC_API_URL.
+// phone can reach the backend on the same machine. Override with EXPO_PUBLIC_API_URL
+// or change it in-app from the Profile screen.
 const devHost = (Constants.expoConfig?.hostUri ?? "").split(":")[0];
 
-export const API_URL =
+const DEFAULT_API_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   (devHost ? `http://${devHost}:4000` : "http://localhost:4000");
+
+let apiUrl = DEFAULT_API_URL;
+
+export function getApiUrl(): string {
+  return apiUrl;
+}
+
+export async function loadApiUrl(): Promise<void> {
+  const saved = await AsyncStorage.getItem("pg_manage_api_url");
+  if (saved) apiUrl = saved.replace(/\/+$/, "");
+}
+
+export async function setApiUrl(url: string): Promise<void> {
+  const next = url.trim().replace(/\/+$/, "");
+  if (!/^https?:\/\/.+/i.test(next)) {
+    throw new Error("Enter a valid server address, e.g. http://192.168.1.42:4000");
+  }
+  apiUrl = next;
+  await AsyncStorage.setItem("pg_manage_api_url", next);
+}
 
 const TOKEN_KEY = "pg_manage_token";
 let token: string | null = null;
@@ -47,13 +68,13 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
 
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, {
+    res = await fetch(`${apiUrl}${path}`, {
       method: options.method ?? "GET",
       headers,
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     });
   } catch {
-    throw new ApiError(`Cannot reach server at ${API_URL}`, 0);
+    throw new ApiError(`Cannot reach server at ${apiUrl}`, 0);
   }
 
   const text = await res.text();
