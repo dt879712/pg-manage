@@ -57,9 +57,39 @@ export interface Student {
 export interface StudentDetail extends Student {
   room?: { roomNumber: string } | null;
   bed?: { label: string } | null;
+  gender?: string | null;
+  dob?: string | null;
+  joinDate?: string | null;
   invoices?: Invoice[];
   documents?: DocumentFile[];
   userId?: string | null;
+  parents?: ParentLink[];
+  admissionRequest?: AdmissionForm | null;
+}
+
+export interface ParentLink {
+  id: string;
+  parentUserId: string;
+  relation?: string | null;
+  parent: {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string | null;
+    photoUrl?: string | null;
+    isSuperParent?: boolean | null;
+    documents?: DocumentFile[];
+  };
+}
+
+export interface AdmissionForm {
+  id: string;
+  status: string;
+  course?: string | null;
+  college?: string | null;
+  note?: string | null;
+  createdAt: string;
+  documents?: DocumentFile[];
 }
 
 export interface Attendance {
@@ -116,6 +146,7 @@ export interface ManagedUser {
   photoUrl?: string | null;
   role: Role;
   isActive: boolean;
+  isSuperParent?: boolean | null;
   tenantId?: string | null;
 }
 

@@ -191,6 +191,9 @@ model User {
   passwordHash String
   role         Role     @default(STUDENT)
   isActive     Boolean  @default(true)
+  // Super-parent override for PARENT users: null = auto (detected from fees
+  // paid for a future month), true = always super, false = always normal.
+  isSuperParent Boolean?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

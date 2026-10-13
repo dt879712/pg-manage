@@ -41,6 +41,7 @@ usersRouter.get("/:id", async (req, res, next) => {
         photoUrl: true,
         role: true,
         isActive: true,
+        isSuperParent: true,
         documents: { orderBy: { createdAt: "desc" } },
       },
     });
@@ -272,6 +273,7 @@ usersRouter.patch("/:id", async (req, res, next) => {
         phone: z.string().nullable().optional(),
         photoUrl: z.string().nullable().optional(),
         isActive: z.boolean().optional(),
+        isSuperParent: z.boolean().nullable().optional(),
       })
       .parse(req.body);
 
@@ -297,7 +299,7 @@ usersRouter.patch("/:id", async (req, res, next) => {
           folder: "users",
         }),
       },
-      select: { id: true, name: true, email: true, phone: true, photoUrl: true, role: true, isActive: true },
+      select: { id: true, name: true, email: true, phone: true, photoUrl: true, role: true, isActive: true, isSuperParent: true },
     });
     res.json({ user: { ...user, photoUrl: await resolveOptionalUrl(user.photoUrl) } });
   } catch (err) {

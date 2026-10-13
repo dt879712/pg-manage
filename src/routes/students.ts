@@ -144,21 +144,52 @@ studentsRouter.get("/:id", async (req, res, next) => {
       include: {
         room: true,
         bed: true,
-        parents: { include: { parent: { select: { id: true, name: true, email: true, phone: true } } } },
+        parents: {
+          include: {
+            parent: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+                photoUrl: true,
+                isSuperParent: true,
+                documents: { orderBy: { createdAt: "desc" } },
+              },
+            },
+          },
+        },
         documents: true,
         invoices: { orderBy: { createdAt: "desc" } },
+        admissionRequest: { include: { documents: { orderBy: { createdAt: "asc" } } } },
       },
     });
     if (!student) {
       res.status(404).json({ error: "Not found" });
       return;
     }
+    const withUrls = <T extends { fileUrl: string }>(docs: T[]) =>
+      Promise.all(docs.map(async (d) => ({ ...d, fileUrl: await resolveMediaUrl(d.fileUrl) })));
     res.json({
       student: {
         ...student,
         photoUrl: await resolveOptionalUrl(student.photoUrl),
-        documents: await Promise.all(
-          student.documents.map(async (d) => ({ ...d, fileUrl: await resolveMediaUrl(d.fileUrl) }))
+        documents: await withUrls(student.documents),
+        admissionRequest: student.admissionRequest
+          ? {
+              ...student.admissionRequest,
+              documents: await withUrls(student.admissionRequest.documents),
+            }
+          : null,
+        parents: await Promise.all(
+          student.parents.map(async (link) => ({
+            ...link,
+            parent: {
+              ...link.parent,
+              photoUrl: await resolveOptionalUrl(link.parent.photoUrl),
+              documents: await withUrls(link.parent.documents),
+            },
+          }))
         ),
       },
     });

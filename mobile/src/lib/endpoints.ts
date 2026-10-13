@@ -146,7 +146,7 @@ export function deleteTenantImage(id: string) {
   return api<{ ok: boolean }>(`/tenant/images/${id}`, { method: "DELETE" });
 }
 
-export function broadcastNotification(input: { title: string; body: string; audience: string }) {
+export function broadcastNotification(input: { title: string; body: string; audiences: string[] }) {
   return api<{ notification: { id: string }; recipients: number }>("/notifications/broadcast", {
     method: "POST",
     body: input,

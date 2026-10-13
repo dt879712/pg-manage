@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Badge, Button, Card, ErrorText, Loading, Muted, Row } from "@/components/ui";
 import type { Tone } from "@/components/ui";
@@ -11,7 +11,7 @@ import {
   uploadDocument,
 } from "@/lib/endpoints";
 import { chooseImage } from "@/lib/images";
-import { roleLabels, space } from "@/lib/theme";
+import { radius, roleLabels, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import type { DocumentFile, Role, UserDetail } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
@@ -78,6 +78,64 @@ export default function UserDetailScreen() {
           onPress={setPhoto}
         />
       </Card>
+
+      {u.role === "PARENT" ? (
+        <Card style={{ gap: space(3) }}>
+          <Text style={{ fontWeight: "700", color: colors.text }}>Super parent</Text>
+          <Muted>
+            Super parents are targeted by the &quot;Super parents&quot; notification. Auto marks
+            them super when their child has paid a future month in advance.
+          </Muted>
+          <Row style={{ gap: space(2) }}>
+            {(
+              [
+                ["Auto", null],
+                ["Super", true],
+                ["Normal", false],
+              ] as const
+            ).map(([label, value]) => {
+              const active = (u.isSuperParent ?? null) === value;
+              return (
+                <Pressable
+                  key={label}
+                  disabled={busy}
+                  onPress={async () => {
+                    setBusy(true);
+                    setErr(null);
+                    try {
+                      await updateUser(u.id, { isSuperParent: value });
+                      reload();
+                    } catch (e) {
+                      setErr(e instanceof Error ? e.message : "Failed");
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    alignItems: "center",
+                    paddingVertical: space(2),
+                    borderRadius: radius.sm,
+                    borderWidth: 1,
+                    borderColor: active ? colors.primarySolid : colors.border,
+                    backgroundColor: active ? colors.primarySolid : colors.bg,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: active ? colors.onPrimary : colors.text,
+                      fontWeight: "700",
+                      fontSize: 13,
+                    }}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </Row>
+        </Card>
+      ) : null}
 
       <Card style={{ gap: space(3) }}>
         <Text style={{ fontWeight: "700", color: colors.text }}>Documents</Text>

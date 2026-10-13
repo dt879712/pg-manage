@@ -18,14 +18,31 @@ const audienceRoles: Record<string, Role[]> = {
   PARENTS: ["PARENT"],
 };
 
+const AUDIENCE_ENUM = z.enum([
+  "ALL",
+  "OWNERS",
+  "STAFF",
+  "STUDENTS",
+  "PARENTS",
+  "SUPER_PARENTS",
+]);
+
 // "Super parents" = parents whose child has an invoice for a future month
-// (periodMonth/periodYear) that is already fully PAID, i.e. fees paid in advance.
+// (periodMonth/periodYear) that is already fully PAID, i.e. fees paid in
+// advance. The owner can override this per parent via User.isSuperParent
+// (true = always super, false = always normal, null = auto).
 async function superParentUsers(tenantId: string): Promise<{ id: string }[]> {
+  const parents = await prisma.user.findMany({
+    where: { tenantId, role: "PARENT", isActive: true, NOT: { isSuperParent: false } },
+    select: { id: true, isSuperParent: true },
+  });
+  if (!parents.length) return [];
+
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
 
-  const links = await prisma.parentStudent.findMany({
+  const autoLinks = await prisma.parentStudent.findMany({
     where: {
       tenantId,
       student: {
@@ -44,13 +61,11 @@ async function superParentUsers(tenantId: string): Promise<{ id: string }[]> {
     },
     select: { parentUserId: true },
   });
+  const autoIds = new Set(autoLinks.map((l) => l.parentUserId));
 
-  const ids = Array.from(new Set(links.map((l) => l.parentUserId)));
-  if (!ids.length) return [];
-  return prisma.user.findMany({
-    where: { id: { in: ids }, tenantId, role: "PARENT", isActive: true },
-    select: { id: true },
-  });
+  return parents
+    .filter((p) => p.isSuperParent === true || (p.isSuperParent === null && autoIds.has(p.id)))
+    .map((p) => ({ id: p.id }));
 }
 
 // Current user's inbox.
@@ -84,21 +99,46 @@ notificationsRouter.post("/broadcast", requireRole("OWNER"), async (req, res, ne
       .object({
         title: z.string().min(1),
         body: z.string().min(1),
-        audience: z
-          .enum(["ALL", "OWNERS", "STAFF", "STUDENTS", "PARENTS", "SUPER_PARENTS"])
-          .default("ALL"),
+        audiences: AUDIENCE_ENUM.array().min(1).optional(),
+        audience: AUDIENCE_ENUM.optional(),
       })
       .parse(req.body);
 
+    const selected = body.audiences ?? (body.audience ? [body.audience] : ["ALL"]);
     const tenantId = req.user!.tenantId!;
-    const storedAudience = body.audience === "SUPER_PARENTS" ? "PARENTS" : body.audience;
-    const users =
-      body.audience === "SUPER_PARENTS"
-        ? await superParentUsers(tenantId)
-        : await prisma.user.findMany({
-            where: { tenantId, role: { in: audienceRoles[body.audience] }, isActive: true },
-            select: { id: true },
-          });
+
+    const roles = new Set<Role>();
+    let wantsSuperParents = false;
+    for (const aud of selected) {
+      if (aud === "SUPER_PARENTS") {
+        wantsSuperParents = true;
+        continue;
+      }
+      for (const role of audienceRoles[aud] ?? []) roles.add(role);
+    }
+
+    const recipientIds = new Set<string>();
+    if (roles.size) {
+      const found = await prisma.user.findMany({
+        where: { tenantId, role: { in: [...roles] }, isActive: true },
+        select: { id: true },
+      });
+      for (const user of found) recipientIds.add(user.id);
+    }
+    if (wantsSuperParents) {
+      for (const user of await superParentUsers(tenantId)) recipientIds.add(user.id);
+    }
+    const users = [...recipientIds].map((id) => ({ id }));
+
+    // Notification.audience is display metadata only (recipients are stored
+    // explicitly). Keep a single enum value: the sole audience, else ALL.
+    const first = selected[0];
+    const storedAudience =
+      selected.includes("ALL") || selected.length !== 1 || !first
+        ? "ALL"
+        : first === "SUPER_PARENTS"
+          ? "PARENTS"
+          : first;
 
     const notification = await prisma.$transaction(async (tx) => {
       const created = await tx.notification.create({

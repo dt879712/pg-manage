@@ -1,6 +1,9 @@
 import { useState } from "react";
-import { Alert, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Platform, ScrollView, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { EncodingType, File, Paths } from "expo-file-system";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 import { Badge, Button, Card, ErrorText, Loading, Muted, Row, statusTone } from "@/components/ui";
 import { Avatar, DocumentGallery } from "@/components/documents";
 import { api } from "@/lib/api";
@@ -13,9 +16,10 @@ import {
 } from "@/lib/endpoints";
 import { chooseImage } from "@/lib/images";
 import { fullName, money, shortDate } from "@/lib/format";
+import { studentFormHtml } from "@/lib/studentForm";
 import { radius, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
-import type { DocumentFile, StudentDetail } from "@/lib/types";
+import type { DocumentFile, StudentDetail, TenantBranding } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
 
 export default function StudentDetailScreen() {
@@ -23,6 +27,7 @@ export default function StudentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { data, loading, error, reload } = useApi<{ student: StudentDetail }>(`/students/${id}`);
+  const { data: tenantData } = useApi<{ tenant: TenantBranding }>("/tenant");
   const input = [
     inputStyle,
     { borderColor: colors.border, color: colors.text, backgroundColor: colors.bg },
@@ -35,6 +40,7 @@ export default function StudentDetailScreen() {
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginErr, setLoginErr] = useState<string | null>(null);
   const [docBusy, setDocBusy] = useState(false);
+  const [formBusy, setFormBusy] = useState(false);
 
   if (loading) return <Loading />;
   const s = data?.student;
@@ -96,6 +102,95 @@ export default function StudentDetailScreen() {
     }
   };
 
+  const exportForm = async () => {
+    setFormBusy(true);
+    setErr(null);
+    try {
+      const t = tenantData?.tenant;
+      const documents = [
+        ...(s.documents ?? []).map((d) => ({ title: d.title || d.type, url: d.fileUrl })),
+        ...(s.admissionRequest?.documents ?? []).map((d) => ({
+          title: d.title || `Form ${d.type}`,
+          url: d.fileUrl,
+        })),
+        ...(s.parents ?? []).flatMap((l) =>
+          (l.parent.documents ?? []).map((d) => ({
+            title: `${l.parent.name} · ${d.title || d.type}`,
+            url: d.fileUrl,
+          }))
+        ),
+      ];
+      const html = studentFormHtml({
+        pgName: t?.name,
+        logoUrl: t?.logoUrl,
+        student: {
+          firstName: s.firstName,
+          lastName: s.lastName,
+          gender: s.gender,
+          dob: s.dob,
+          phone: s.phone,
+          email: s.email,
+          address: s.address,
+          guardianName: s.guardianName,
+          guardianPhone: s.guardianPhone,
+          guardianEmail: s.guardianEmail,
+          roomNumber: s.room?.roomNumber,
+          bedLabel: s.bed?.label,
+          joinDate: s.joinDate,
+          status: s.status,
+        },
+        admission: s.admissionRequest
+          ? {
+              course: s.admissionRequest.course,
+              college: s.admissionRequest.college,
+              note: s.admissionRequest.note,
+              submittedAt: s.admissionRequest.createdAt,
+            }
+          : null,
+        parents: (s.parents ?? []).map((l) => ({
+          name: l.parent.name,
+          relation: l.relation,
+          phone: l.parent.phone,
+          email: l.parent.email,
+          isSuperParent: l.parent.isSuperParent,
+        })),
+        documents,
+        generatedAt: new Date().toLocaleString("en-IN"),
+      });
+
+      if (Platform.OS === "web") {
+        const w = window.open("", "_blank");
+        if (w) {
+          w.document.open();
+          w.document.write(html);
+          w.document.close();
+        }
+        return;
+      }
+
+      const { uri, base64 } = await Print.printToFileAsync({ html, base64: true });
+      let pdfUri = uri;
+      if (base64) {
+        const target = new File(Paths.cache, "student-form.pdf");
+        if (target.exists) target.delete();
+        target.create();
+        target.write(base64, { encoding: EncodingType.Base64 });
+        pdfUri = target.uri;
+      }
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(pdfUri, {
+          mimeType: "application/pdf",
+          dialogTitle: "Save student form",
+          UTI: "com.adobe.pdf",
+        });
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to build PDF");
+    } finally {
+      setFormBusy(false);
+    }
+  };
+
   return (
     <ScrollView contentContainerStyle={{ padding: space(4), gap: space(4) }}>
       <Card style={{ gap: space(3) }}>
@@ -136,6 +231,36 @@ export default function StudentDetailScreen() {
             }
           }}
         />
+      </Card>
+
+      <Card style={{ gap: space(3) }}>
+        <Text style={{ fontWeight: "700", color: colors.text }}>Admission form</Text>
+        <Muted>Filled form with student &amp; parent documents, exported as PDF.</Muted>
+        {(s.parents ?? []).length === 0 ? <Muted>No parents linked</Muted> : null}
+        {(s.parents ?? []).map((l) => (
+          <Row key={l.id} between>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text numberOfLines={1} style={{ color: colors.text, fontWeight: "600" }}>
+                {l.parent.name}
+              </Text>
+              <Muted numberOfLines={1}>
+                {l.relation ?? "Guardian"} · {l.parent.phone ?? "-"}
+              </Muted>
+            </View>
+            <Badge
+              label={
+                l.parent.isSuperParent === true
+                  ? "Super"
+                  : l.parent.isSuperParent === false
+                    ? "Normal"
+                    : "Auto"
+              }
+              tone={l.parent.isSuperParent === true ? "success" : "neutral"}
+            />
+          </Row>
+        ))}
+        <ErrorText>{err}</ErrorText>
+        <Button label="Download filled form (PDF)" loading={formBusy} onPress={exportForm} />
       </Card>
 
       <Card style={{ gap: space(3) }}>
