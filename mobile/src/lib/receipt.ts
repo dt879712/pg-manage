@@ -24,6 +24,7 @@ export interface ReceiptInput {
   reference?: string | null;
   paidAt: string;
   receiptNo: string;
+  advanceMonths?: string[];
 }
 
 const esc = (value?: string | null): string =>
@@ -114,6 +115,9 @@ export function receiptHtml(r: ReceiptInput): string {
   .box p { display:flex; justify-content:space-between; font-size:13px; margin:6px 0; }
   .box span { color:#64748B; }
   .qr { width:130px; height:130px; display:block; margin-top:6px; }
+  .adv { margin-top:14px; border:1px solid #E2E8F0; border-radius:10px; padding:12px; }
+  .advTitle { font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:#64748B; font-weight:700; margin-bottom:6px; }
+  .advList { font-size:14px; font-weight:700; color:#0F172A; }
   .foot { margin-top:22px; font-size:12px; color:#64748B; border-top:1px solid #E2E8F0; padding-top:12px; }
   .sign { margin-top:34px; text-align:right; font-size:12px; color:#64748B; }
 </style>
@@ -166,6 +170,8 @@ export function receiptHtml(r: ReceiptInput): string {
     <span>${money(r.paidAmount)}</span>
   </div>
   ${isPartial ? `<div class="due"><span>Balance due</span><span>${money(due)}</span></div>` : ""}
+
+  ${r.advanceMonths?.length ? `<div class="adv"><div class="advTitle">Advance months paid</div><div class="advList">${r.advanceMonths.map((m) => esc(m)).join(" · ")}</div></div>` : ""}
 
   <div class="grid">
     ${bankBlock}

@@ -84,6 +84,7 @@ function FeesView() {
       reference: null,
       paidAt: payment.paidAt,
       receiptNo: payment.id.slice(-8).toUpperCase(),
+      advanceMonths: advanceMonthsFor(list, inv, payment),
     };
   };
 
@@ -515,6 +516,42 @@ function paidOf(inv: Invoice): number {
 function lastPayment(inv: Invoice): Payment | undefined {
   const payments = inv.payments ?? [];
   return payments[payments.length - 1];
+}
+
+function ymIndex(month: number, year: number): number {
+  return year * 12 + (month - 1);
+}
+
+function monthLabel(month: number, year: number): string {
+  return new Date(year, month - 1, 1).toLocaleDateString("en-IN", {
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function advanceMonthsFor(invoices: Invoice[], inv: Invoice, payment: Payment): string[] {
+  const now = new Date();
+  const cutoff = ymIndex(now.getMonth() + 1, now.getFullYear());
+  const found = new Map<number, string>();
+
+  const consider = (i: Invoice, extra: number) => {
+    if (!i.periodMonth || !i.periodYear) return;
+    const index = ymIndex(i.periodMonth, i.periodYear);
+    if (index <= cutoff) return;
+    const paid = (i.payments ?? []).reduce((sum, p) => sum + p.amount, 0) + extra;
+    if (paid < i.amount) return;
+    found.set(index, monthLabel(i.periodMonth, i.periodYear));
+  };
+
+  const currentInList = invoices.some((i) => i.id === inv.id);
+  for (const i of invoices) {
+    if (i.studentId !== inv.studentId) continue;
+    const hasPayment = (i.payments ?? []).some((p) => p.id === payment.id);
+    consider(i, i.id === inv.id && !hasPayment ? payment.amount : 0);
+  }
+  if (!currentInList) consider(inv, payment.amount);
+
+  return [...found.entries()].sort((a, b) => a[0] - b[0]).map(([, label]) => label);
 }
 
 const styles = {

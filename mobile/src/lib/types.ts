@@ -81,6 +81,8 @@ export interface Invoice {
   title: string;
   amount: number;
   status: string;
+  periodMonth?: number | null;
+  periodYear?: number | null;
   dueDate?: string | null;
   createdAt: string;
   payments?: Payment[];
