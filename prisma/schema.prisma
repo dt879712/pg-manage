@@ -118,20 +118,6 @@ enum NotificationAudience {
   USER
 }
 
-enum EmergencyType {
-  MEDICAL
-  FIRE
-  SECURITY
-  OTHER
-}
-
-enum EmergencyStatus {
-  ACTIVE
-  ACKNOWLEDGED
-  RESOLVED
-  CANCELLED
-}
-
 // ---------------------------------------------------------------------------
 // Core: tenant (one PG owner / organization)
 // ---------------------------------------------------------------------------
@@ -170,7 +156,6 @@ model Tenant {
   payments      Payment[]
   documents     Document[]
   notifications Notification[]
-  emergencies   EmergencyEvent[]
   auditLogs     AuditLog[]
   deviceTokens  DeviceToken[]
   images        TenantImage[]
@@ -219,8 +204,6 @@ model User {
   documents            Document[]          @relation("UserDocuments")
   createdNotifications Notification[]      @relation("NotificationCreator")
   notificationInbox    NotificationRecipient[]
-  triggeredEmergencies EmergencyEvent[]    @relation("EmergencyTriggerer")
-  emergencyAcks        EmergencyAck[]
   auditLogs            AuditLog[]
   deviceTokens         DeviceToken[]
   passwordResets       PasswordResetToken[]
@@ -636,45 +619,6 @@ model NotificationRecipient {
   @@unique([notificationId, userId])
   @@index([userId])
   @@map("notification_recipients")
-}
-
-// ---------------------------------------------------------------------------
-// Emergency alerts
-// ---------------------------------------------------------------------------
-
-model EmergencyEvent {
-  id            String          @id @default(cuid())
-  tenantId      String
-  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  type          EmergencyType   @default(OTHER)
-  message       String?
-  latitude      Float?
-  longitude     Float?
-  status        EmergencyStatus @default(ACTIVE)
-  triggeredById String?
-  triggeredBy   User?           @relation("EmergencyTriggerer", fields: [triggeredById], references: [id])
-  createdAt     DateTime        @default(now())
-  resolvedAt    DateTime?
-
-  acks EmergencyAck[]
-
-  @@index([tenantId])
-  @@index([status])
-  @@index([createdAt])
-  @@map("emergency_events")
-}
-
-model EmergencyAck {
-  id        String         @id @default(cuid())
-  eventId   String
-  event     EmergencyEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime       @default(now())
-
-  @@unique([eventId, userId])
-  @@index([userId])
-  @@map("emergency_acks")
 }
 
 // ---------------------------------------------------------------------------
