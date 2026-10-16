@@ -14,15 +14,13 @@ export default function ForgotPasswordScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-  const [devLink, setDevLink] = useState<string | null>(null);
 
   const submit = async () => {
     setError(null);
     setLoading(true);
     try {
-      const res = await forgotPassword(email.trim());
+      await forgotPassword(email.trim());
       setDone(true);
-      setDevLink(res.devLink ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not send reset request");
     } finally {
@@ -56,24 +54,9 @@ export default function ForgotPasswordScreen() {
               <Text style={{ color: colors.text, fontSize: 15, lineHeight: 22 }}>
                 If an owner account exists for{" "}
                 <Text style={{ fontWeight: "700", color: colors.text }}>{email.trim()}</Text>, a
-                password-reset link has been sent to that email. It expires in 30 minutes.
+                password-reset link has been emailed to it. It expires in 30 minutes.
               </Text>
-              {devLink ? (
-                <View
-                  style={{
-                    backgroundColor: colors.cardAlt,
-                    borderRadius: radius.sm,
-                    padding: space(3),
-                    gap: space(2),
-                  }}
-                >
-                  <Text style={{ color: colors.warning, fontSize: 13, fontWeight: "700" }}>
-                    Email not configured (dev mode)
-                  </Text>
-                  <Text style={{ color: colors.text, fontSize: 13, lineHeight: 19 }}>{devLink}</Text>
-                  <Muted>Open this link in the browser to choose a new password.</Muted>
-                </View>
-              ) : null}
+              <Muted>Check the inbox (and spam folder) for the reset link.</Muted>
               <Button label="Back to sign in" variant="ghost" onPress={() => router.replace("/login")} />
             </View>
           ) : (
