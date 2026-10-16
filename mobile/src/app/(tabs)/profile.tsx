@@ -3,7 +3,6 @@ import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Button, Card, ErrorText, Muted, Row } from "@/components/ui";
 import { DesktopShell } from "@/components/shell";
-import { getApiUrl, setApiUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { updateUser } from "@/lib/endpoints";
 import { radius, roleLabels, space } from "@/lib/theme";
@@ -15,8 +14,6 @@ function ProfileView() {
   const { user, signOut, setUser } = useAuth();
   const [editing, setEditing] = useState(false);
   const [email, setEmail] = useState(user?.email ?? "");
-  const [serverEditing, setServerEditing] = useState(false);
-  const [serverInput, setServerInput] = useState(getApiUrl());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (!user) return null;
@@ -116,76 +113,6 @@ function ProfileView() {
         )}
       </Card>
 
-      <Card style={{ gap: space(3) }}>
-        <Detail label="Server" value={getApiUrl()} />
-        {serverEditing ? (
-          <>
-            <TextInput
-              value={serverInput}
-              onChangeText={setServerInput}
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder="http://192.168.1.42:4000"
-              placeholderTextColor={colors.muted}
-              style={{
-                borderWidth: 1,
-                borderRadius: radius.sm,
-                paddingHorizontal: space(3),
-                paddingVertical: space(3),
-                fontSize: 15,
-                borderColor: colors.border,
-                color: colors.text,
-                backgroundColor: colors.bg,
-              }}
-            />
-            <Muted>Where the Dev Hostel backend runs (the PC that hosts it).</Muted>
-            <ErrorText>{error}</ErrorText>
-            <Row style={{ gap: space(2) }}>
-              <Button
-                label="Save"
-                size="sm"
-                icon="checkmark"
-                loading={loading}
-                onPress={async () => {
-                  setError(null);
-                  setLoading(true);
-                  try {
-                    await setApiUrl(serverInput);
-                    setServerEditing(false);
-                  } catch (e) {
-                    setError(e instanceof Error ? e.message : "Could not save server");
-                  } finally {
-                    setLoading(false);
-                  }
-                }}
-              />
-              <Button
-                label="Cancel"
-                variant="ghost"
-                size="sm"
-                icon="close"
-                onPress={() => {
-                  setServerInput(getApiUrl());
-                  setServerEditing(false);
-                  setError(null);
-                }}
-              />
-            </Row>
-          </>
-        ) : (
-          <Button
-            label="Change server"
-            variant="ghost"
-            size="sm"
-            icon="server-outline"
-            onPress={() => {
-              setServerInput(getApiUrl());
-              setServerEditing(true);
-            }}
-          />
-        )}
-      </Card>
-
       {user.role === "OWNER" ? (
         <Card style={{ gap: space(3) }}>
           <Text style={{ fontWeight: "700", color: colors.text }}>Manage your PG</Text>
@@ -205,6 +132,14 @@ function ProfileView() {
           />
         </Card>
       ) : null}
+
+      <Button
+        label="Privacy policy"
+        variant="ghost"
+        size="sm"
+        icon="shield-checkmark-outline"
+        onPress={() => router.push("/privacy")}
+      />
 
       <Button label="Sign out" variant="danger" size="sm" icon="log-out-outline" onPress={signOut} />
     </ScrollView>
