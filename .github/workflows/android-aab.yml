@@ -1,0 +1,78 @@
+name: Build Android AAB (signed)
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: "EXPO_PUBLIC_API_URL baked into the app"
+        required: false
+        default: "https://dev-hostel-api.onrender.com"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Generate native Android project
+        env:
+          EXPO_PUBLIC_API_URL: ${{ inputs.api_url }}
+          UPLOAD_STORE_FILE: ${{ github.workspace }}/mobile/android/app/release.keystore
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Prepare upload keystore
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+            echo "Using the existing upload keystore from repository secrets."
+          else
+            keytool -genkeypair -v \
+              -keystore android/app/release.keystore \
+              -alias "upload" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "DevHostel2026" \
+              -keypass "DevHostel2026" \
+              -dname "CN=Dev Hostel, OU=Mobile, O=Dev Hostel, L=IN, ST=IN, C=IN"
+            echo "GENERATED_KEYSTORE=1" >> $GITHUB_ENV
+            echo "::warning::Generated a NEW upload keystore. Download the 'upload-keystore' artifact and save it as repository secrets or you will be unable to update this app later."
+          fi
+
+      - name: Build release AAB
+        working-directory: mobile/android
+        env:
+          EXPO_PUBLIC_API_URL: ${{ inputs.api_url }}
+          UPLOAD_STORE_FILE: ${{ github.workspace }}/mobile/android/app/release.keystore
+          UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || 'DevHostel2026' }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || 'upload' }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || 'DevHostel2026' }}
+        run: ./gradlew bundleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
+      - name: Upload generated keystore (first run only)
+        if: env.GENERATED_KEYSTORE == '1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: upload-keystore
+          path: mobile/android/app/release.keystore
