@@ -14,6 +14,11 @@ function getTransporter(): Transporter {
       port: env.smtpPort,
       secure: env.smtpPort === 465,
       auth: { user: env.smtpUser, pass: env.smtpPass },
+      // Fail fast: some hosts (e.g. Render free) block SMTP ports, and the
+      // default 2-minute timeout makes reset requests hang.
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 10000,
     });
   }
   return transporter;
