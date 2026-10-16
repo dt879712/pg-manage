@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
 import { FlatList, Modal, Pressable, RefreshControl, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
@@ -132,10 +133,19 @@ function VideosView() {
 
 function VideoModal({ video, onClose }: { video: StatusVideo; onClose: () => void }) {
   const { colors } = useTheme();
+  const [muted, setMuted] = useState(true);
   const player = useVideoPlayer(video.url, (p) => {
     p.loop = true;
-    p.muted = true; p.play();
+    p.muted = true;
+    p.play();
   });
+
+  function toggleMute() {
+    setMuted((m) => {
+      player.muted = !m;
+      return !m;
+    });
+  }
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -153,12 +163,36 @@ function VideoModal({ video, onClose }: { video: StatusVideo; onClose: () => voi
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: space(3) }}>
           {video.url ? (
-            <VideoView
-              player={player}
-              style={{ width: "100%", maxWidth: 420, aspectRatio: 3 / 4, borderRadius: radius.lg }}
-              contentFit="contain"
-              surfaceType="textureView"
-            />
+            <View style={{ width: "100%", maxWidth: 420 }}>
+              <VideoView
+                player={player}
+                style={{ width: "100%", aspectRatio: 3 / 4, borderRadius: radius.lg }}
+                contentFit="contain"
+                nativeControls={false}
+                surfaceType="textureView"
+              />
+              <Pressable
+                onPress={toggleMute}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={muted ? "Unmute video" : "Mute video"}
+                style={{
+                  position: "absolute",
+                  right: 12,
+                  bottom: 12,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: "rgba(0,0,0,0.65)",
+                  borderWidth: 1,
+                  borderColor: "rgba(255,255,255,0.25)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Ionicons name={muted ? "volume-mute" : "volume-high"} color="#fff" size={22} />
+              </Pressable>
+            </View>
           ) : (
             <Card>
               <Text style={{ color: colors.text }}>Video not available.</Text>
