@@ -160,7 +160,8 @@ authRouter.post("/forgot-password", async (req, res, next) => {
       },
     });
 
-    const link = `${env.resetUrlBase}/reset-password?token=${token}`;
+    const resetBase = env.resetUrlBase.replace(/\/+$/, "");
+    const link = `${resetBase}${resetBase.endsWith(":") ? "//" : "/"}reset-password?token=${token}`;
     const text =
       `Hi ${user.name},\n\n` +
       `We received a request to reset your Dev Hostel password.\n\n` +
