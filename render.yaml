@@ -44,6 +44,8 @@ services:
   - type: web
     name: dev-hostel-web
     runtime: static
+    # Rebuilt rarely (password-reset page only) -> deploy manually to save pipeline minutes.
+    autoDeploy: false
     rootDir: mobile
     buildCommand: npm ci && npx expo export --platform web
     staticPublishPath: dist
