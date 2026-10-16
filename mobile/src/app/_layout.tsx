@@ -22,6 +22,7 @@ function AppStack() {
         <Stack.Screen name="student/[id]" options={{ headerShown: true, header: () => <TopBar /> }} />
         <Stack.Screen name="user/[id]" options={{ headerShown: true, header: () => <TopBar /> }} />
         <Stack.Screen name="settings" options={{ headerShown: true, header: () => <TopBar /> }} />
+        <Stack.Screen name="privacy" options={{ headerShown: true, header: () => <TopBar /> }} />
         <Stack.Screen name="notify" options={{ headerShown: true, header: () => <TopBar /> }} />
         <Stack.Screen name="leave/new" options={{ headerShown: true, header: () => <TopBar /> }} />
         <Stack.Screen name="messages" options={{ headerShown: true, header: () => <TopBar /> }} />
