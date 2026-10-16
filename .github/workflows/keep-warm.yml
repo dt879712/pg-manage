@@ -1,10 +1,11 @@
-name: Keep API warm
+name: Keep API warm (backup)
 
 on:
   schedule:
-    # Gentle, evenly spaced pings. Multiple short attempts per run so a single
-    # slow cold-start never counts as a failure.
-    - cron: "*/10 * * * *"
+    # Hourly backup only — an external free pinger (UptimeRobot / cron-job.org)
+    # does the real 5-minute keeping-warm. Hourly keeps this inside the free
+    # GitHub Actions minute budget for a private repo (~720 min/mo < 2,000).
+    - cron: "0 * * * *"
   workflow_dispatch:
 
 concurrency:
