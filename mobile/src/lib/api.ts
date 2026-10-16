@@ -64,20 +64,48 @@ interface ApiOptions {
   auth?: boolean;
 }
 
+// Long timeout + one silent retry so a sleeping free-tier server has time to
+// wake up instead of surfacing a scary error to the user.
+const REQUEST_TIMEOUT_MS = 75_000;
+const MAX_ATTEMPTS = 2;
+
+type RetryListener = (attempt: number, max: number) => void;
+let retryListener: RetryListener | null = null;
+export function setRetryListener(cb: RetryListener | null): void {
+  retryListener = cb;
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (options.auth !== false && token) headers.Authorization = `Bearer ${token}`;
 
-  let res: Response;
-  try {
-    res = await fetch(`${apiUrl}${path}`, {
-      method: options.method ?? "GET",
-      headers,
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-    });
-  } catch {
-    throw new ApiError(`Cannot reach server at ${apiUrl}`, 0);
+  let res: Response | null = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS && !res; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      res = await fetch(`${apiUrl}${path}`, {
+        method: options.method ?? "GET",
+        headers,
+        body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+        signal: controller.signal,
+      });
+    } catch {
+      // Network error or timeout — usually the free server waking from sleep.
+      if (attempt < MAX_ATTEMPTS) {
+        retryListener?.(attempt, MAX_ATTEMPTS);
+        await sleep(2000 * attempt);
+      } else {
+        throw new ApiError(`Cannot reach server at ${apiUrl}`, 0);
+      }
+    } finally {
+      clearTimeout(timer);
+    }
   }
+
+  if (!res) throw new ApiError(`Cannot reach server at ${apiUrl}`, 0);
 
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;

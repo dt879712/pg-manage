@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,7 +16,7 @@ import { useRouter } from "expo-router";
 import { Button, Card, ErrorText } from "@/components/ui";
 import { Logo } from "@/components/logo";
 import { useAuth } from "@/lib/auth";
-import { ApiError } from "@/lib/api";
+import { ApiError, setRetryListener } from "@/lib/api";
 import { radius, shadow, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import type { Role } from "@/lib/types";
@@ -36,14 +37,27 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [resetAvailable, setResetAvailable] = useState<boolean | null>(null);
+  const slowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isWide = Platform.OS === "web" && width >= 860;
+
+  useEffect(() => {
+    setRetryListener((attempt, max) => {
+      setNotice(`Waking up the server… retrying (${attempt + 1}/${max}). This can take up to a minute.`);
+    });
+    return () => setRetryListener(null);
+  }, []);
 
   const submit = async () => {
     setError(null);
     setResetAvailable(null);
+    setNotice(null);
     setLoading(true);
+    slowTimer.current = setTimeout(() => {
+      setNotice("Waking up the server… this can take up to a minute the first time.");
+    }, 2500);
     try {
       await signIn(email.trim(), password);
       router.replace("/(tabs)");
@@ -60,6 +74,8 @@ export default function Login() {
         setError(e instanceof Error ? e.message : "Login failed");
       }
     } finally {
+      if (slowTimer.current) clearTimeout(slowTimer.current);
+      setNotice(null);
       setLoading(false);
     }
   };
@@ -133,6 +149,12 @@ export default function Login() {
           </View>
         </View>
         <ErrorText>{error}</ErrorText>
+        {notice ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space(2) }}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={{ color: colors.muted, fontSize: 13, flex: 1 }}>{notice}</Text>
+          </View>
+        ) : null}
         <Button label="Sign in" onPress={submit} loading={loading} block icon="log-in-outline" />
         {resetAvailable === true ? (
           <Pressable
