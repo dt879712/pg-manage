@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, loadApiUrl, loadToken, saveToken } from "./api";
 import { syncPushToken } from "./push";
+import { invalidateApiCache } from "./useApi";
 import type { AuthUser } from "./types";
 
 interface AuthContextValue {
@@ -41,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: { email, password },
       auth: false,
     });
+    invalidateApiCache();
     await saveToken(res.token);
     setUser(res.user);
     void syncPushToken();
@@ -49,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await saveToken(null);
+    invalidateApiCache();
     setUser(null);
   };
 

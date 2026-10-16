@@ -30,6 +30,7 @@
       "expo-router",
       "./plugins/with-upi-queries",
       "./plugins/with-cleartext-traffic",
+      "./plugins/with-release-minify",
       "expo-notifications",
       "expo-video",
       [
