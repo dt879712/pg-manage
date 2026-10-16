@@ -93,7 +93,8 @@ authRouter.post("/login", async (req, res, next) => {
 
     const user = await prisma.user.findUnique({ where: { email: body.email } });
     if (!user) {
-      res.status(401).json({ error: "Invalid credentials" });
+      // Only owners can self-reset; everyone else is told to contact their owner.
+      res.status(401).json({ error: "Invalid credentials", canReset: false });
       return;
     }
     if (!user.isActive) {
@@ -105,7 +106,8 @@ authRouter.post("/login", async (req, res, next) => {
     }
     const ok = await verifyPassword(body.password, user.passwordHash);
     if (!ok) {
-      res.status(401).json({ error: "Invalid credentials" });
+      const canReset = user.role === "OWNER";
+      res.status(401).json({ error: "Invalid credentials", canReset });
       return;
     }
 

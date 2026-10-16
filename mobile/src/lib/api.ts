@@ -50,9 +50,11 @@ export function getToken(): string | null {
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  data: { canReset?: boolean; error?: string } | null;
+  constructor(message: string, status: number, data: { canReset?: boolean; error?: string } | null = null) {
     super(message);
     this.status = status;
+    this.data = data;
   }
 }
 
@@ -80,7 +82,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) {
-    throw new ApiError(data?.error ?? `Request failed (${res.status})`, res.status);
+    throw new ApiError(data?.error ?? `Request failed (${res.status})`, res.status, data);
   }
   return data as T;
 }

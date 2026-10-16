@@ -15,6 +15,7 @@ import { useRouter } from "expo-router";
 import { Button, Card, ErrorText } from "@/components/ui";
 import { Logo } from "@/components/logo";
 import { useAuth } from "@/lib/auth";
+import { ApiError } from "@/lib/api";
 import { radius, shadow, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import type { Role } from "@/lib/types";
@@ -35,17 +36,29 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resetAvailable, setResetAvailable] = useState<boolean | null>(null);
 
   const isWide = Platform.OS === "web" && width >= 860;
 
   const submit = async () => {
     setError(null);
+    setResetAvailable(null);
     setLoading(true);
     try {
       await signIn(email.trim(), password);
       router.replace("/(tabs)");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Login failed");
+      if (e instanceof ApiError && e.status === 401) {
+        const canReset = e.data?.canReset === true;
+        setResetAvailable(canReset);
+        setError(
+          canReset
+            ? "Incorrect password. You can reset it below."
+            : "Incorrect email or password. Only the owner can reset a password — please contact your owner.",
+        );
+      } else {
+        setError(e instanceof Error ? e.message : "Login failed");
+      }
     } finally {
       setLoading(false);
     }
@@ -121,11 +134,22 @@ export default function Login() {
         </View>
         <ErrorText>{error}</ErrorText>
         <Button label="Sign in" onPress={submit} loading={loading} block icon="log-in-outline" />
-        <Pressable onPress={() => router.push("/forgot-password")} style={{ alignItems: "center", paddingVertical: space(1) }}>
-          <Text style={{ color: colors.primary, fontSize: 14, fontWeight: "600" }}>
-            Forgot password?
+        {resetAvailable === true ? (
+          <Pressable
+            onPress={() => router.push("/forgot-password")}
+            style={{ alignItems: "center", paddingVertical: space(1) }}
+          >
+            <Text style={{ color: colors.primary, fontSize: 14, fontWeight: "600" }}>
+              Forgot password? Reset it
+            </Text>
+          </Pressable>
+        ) : resetAvailable === false ? (
+          <Text
+            style={{ color: colors.muted, fontSize: 13, textAlign: "center", paddingVertical: space(1) }}
+          >
+            Only the PG owner can reset passwords. Please contact your owner.
           </Text>
-        </Pressable>
+        ) : null}
         <View style={{ height: 1, backgroundColor: colors.border }} />
         <Pressable
           onPress={() => router.push("/apply")}
