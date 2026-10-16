@@ -4,6 +4,8 @@ services:
   - type: web
     name: dev-hostel-api
     runtime: docker
+    # Co-locate with the Supabase DB (ap-southeast-1) and India users.
+    region: singapore
     # "free" spins down after 15 min idle (slow first request). Upgrade to "starter" for always-on.
     plan: free
     healthCheckPath: /health
