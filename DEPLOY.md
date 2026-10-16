@@ -50,7 +50,7 @@ Recommended: **Google Cloud Run** under your existing project `dev-hostel-d7b4e`
 - Users can also change it at runtime: **Profile → Server**.
 
 ## 3. Android → Google Play
-- Google Play Console account (one-time **$25**); create the app id `com.pgmanage.app`.
+- Google Play Console account (one-time **$25**); create the app id `com.devhostel.app`.
 - Build + submit:
   ```bash
   cd mobile

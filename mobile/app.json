@@ -9,10 +9,10 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.pgmanage.app"
+      "bundleIdentifier": "com.devhostel.app"
     },
     "android": {
-      "package": "com.pgmanage.app",
+      "package": "com.devhostel.app",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#4F46E5",
