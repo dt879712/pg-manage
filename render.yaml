@@ -16,7 +16,7 @@ services:
       - key: CORS_ORIGINS
         value: "*"
       - key: RESET_URL_BASE
-        sync: false
+        value: https://dev-hostel-web.onrender.com
       - key: MAIL_FROM
         sync: false
       - key: SMTP_HOST
