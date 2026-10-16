@@ -20,7 +20,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://YOUR-API-DOMAIN"
+        "EXPO_PUBLIC_API_URL": "https://dev-hostel-api.onrender.com"
       }
     }
   },

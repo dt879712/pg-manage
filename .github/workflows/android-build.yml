@@ -6,7 +6,7 @@ on:
       api_url:
         description: "EXPO_PUBLIC_API_URL baked into the app (must be reachable from the phone)"
         required: false
-        default: "http://192.168.1.42:4000"
+        default: "https://dev-hostel-api.onrender.com"
 
 jobs:
   build:
