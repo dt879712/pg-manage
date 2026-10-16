@@ -4,6 +4,14 @@ import { cleanupExpiredMessages } from "./routes/messages";
 
 const CLEANUP_INTERVAL_MS = 15 * 60 * 1000;
 
+// Keep the process alive on unexpected errors instead of crashing the container.
+process.on("uncaughtException", (err) => {
+  console.error("[fatal] uncaught exception", err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[fatal] unhandled rejection", reason);
+});
+
 function runMessageCleanup() {
   cleanupExpiredMessages()
     .then((count) => {

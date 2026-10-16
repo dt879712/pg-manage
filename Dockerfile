@@ -21,4 +21,5 @@ ENV PORT=8080
 EXPOSE 8080
 
 # Apply pending database migrations, then start the API.
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+# Migrations are best-effort: if they fail, the API still starts (never crash-loops).
+CMD ["sh", "-c", "npx prisma migrate deploy || echo '[startup] migrate deploy failed - starting API anyway'; exec node dist/index.js"]
