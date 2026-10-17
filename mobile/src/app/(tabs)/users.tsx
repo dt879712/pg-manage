@@ -44,17 +44,21 @@ function UsersView() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [resetFor, setResetFor] = useState<ManagedUser | null>(null);
+  const [resetPw, setResetPw] = useState("");
 
-  const reset = async (u: ManagedUser) => {
+  const reset = async (u: ManagedUser, newPassword?: string) => {
     setBusy(u.id);
     setErr(null);
     try {
-      const r = await resetUserPassword(u.id);
+      const r = await resetUserPassword(u.id, newPassword);
+      setResetFor(null);
+      setResetPw("");
       Alert.alert(
-        "Password reset",
+        "Password updated",
         r.temporaryPassword
           ? `Temporary password for ${u.name}:\n\n${r.temporaryPassword}\n\nShare it with them and ask them to change it after login.`
-          : "Password updated."
+          : `New password set for ${u.name}.`
       );
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed");
@@ -135,6 +139,59 @@ function UsersView() {
         </Card>
       ) : null}
 
+      {resetFor ? (
+        <Card style={{ gap: space(3) }}>
+          <Row between>
+            <Text style={{ fontWeight: "700", color: colors.text }}>
+              Set password · {resetFor.name}
+            </Text>
+            <Button
+              label="Cancel"
+              variant="ghost"
+              size="sm"
+              icon="close"
+              onPress={() => {
+                setResetFor(null);
+                setResetPw("");
+              }}
+            />
+          </Row>
+          <Muted>
+            Type a new password (no old password needed), or generate a temporary one to share.
+          </Muted>
+          <TextInput
+            value={resetPw}
+            onChangeText={setResetPw}
+            placeholder="New password (min 6)"
+            placeholderTextColor={colors.muted}
+            autoCapitalize="none"
+            secureTextEntry
+            style={input}
+          />
+          <Row style={{ gap: space(3) }}>
+            <View style={{ flex: 1 }}>
+              <Button
+                label="Set password"
+                disabled={resetPw.length < 6}
+                size="sm"
+                icon="key-outline"
+                loading={busy === resetFor.id}
+                onPress={() => reset(resetFor, resetPw)}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                label="Generate temporary"
+                variant="ghost"
+                size="sm"
+                loading={busy === resetFor.id}
+                onPress={() => reset(resetFor)}
+              />
+            </View>
+          </Row>
+        </Card>
+      ) : null}
+
       {(data?.users ?? []).length === 0 ? <Empty text="No accounts yet" /> : null}
 
       {(data?.users ?? []).map((u) => (
@@ -160,11 +217,13 @@ function UsersView() {
             <Text style={{ color: colors.danger, fontSize: 13, fontWeight: "600" }}>Disabled</Text>
           )}
           <Button
-            label="Reset password"
+            label="Set password"
             variant="ghost"
             size="sm"
-            loading={busy === u.id}
-            onPress={() => reset(u)}
+            onPress={() => {
+              setResetFor(u);
+              setResetPw("");
+            }}
           />
         </View>
       ))}

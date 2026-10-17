@@ -52,10 +52,10 @@ export function attendanceApi(dir: "check-in" | "check-out", studentId?: string)
   });
 }
 
-export function resetUserPassword(userId: string) {
+export function resetUserPassword(userId: string, password?: string) {
   return api<{ ok: boolean; temporaryPassword?: string }>(`/users/${userId}/reset-password`, {
     method: "POST",
-    body: {},
+    body: password ? { newPassword: password } : {},
   });
 }
 
