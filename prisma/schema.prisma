@@ -131,6 +131,7 @@ model Tenant {
   description  String?
   address      String?
   receiptFooter String?
+  rules        String?
   upiId        String?
   upiQrUrl     String?
   bankName          String?

@@ -60,7 +60,13 @@ export async function getPushToken(): Promise<string | null> {
       await Notifications.setNotificationChannelAsync("default", {
         name: "Default",
         importance: Notifications.AndroidImportance.MAX,
+        sound: "default",
+        enableVibrate: true,
+        vibrationPattern: [0, 250, 250, 250],
         lightColor: "#4F46E5",
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+        bypassDnd: false,
+        showBadge: true,
       });
     }
 

@@ -51,6 +51,9 @@ export function StaffHome({ name }: { name: string }) {
             <Button label="Messages" variant="ghost" icon="chatbubbles-outline" onPress={() => router.push("/messages")} />
           </View>
         ) : null}
+        <View style={{ flex: 1 }}>
+          <Button label="Rules" variant="ghost" icon="book-outline" onPress={() => router.push("/rules")} />
+        </View>
       </Row>
 
       <TextInput

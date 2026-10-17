@@ -21,6 +21,8 @@ function pageTitle(segments: string[]): string {
       return "Accounts";
     case "profile":
       return "Profile";
+    case "rules":
+      return "Rules & regulations";
     case "notify":
       return "Send notification";
     case "settings":
@@ -60,7 +62,7 @@ function formatTime(d: Date): string {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    hour12: false,
+    hour12: true,
     timeZone: "Asia/Kolkata",
   });
 }

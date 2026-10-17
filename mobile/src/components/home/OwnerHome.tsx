@@ -70,6 +70,7 @@ export function OwnerHome() {
         <QuickAction label="Accounts" icon="id-card-outline" onPress={() => router.push("/(tabs)/users")} />
         <QuickAction label="Messages" icon="chatbubbles-outline" onPress={() => router.push("/messages")} />
         <QuickAction label="Check-in videos" icon="videocam-outline" onPress={() => router.push("/status-videos")} />
+        <QuickAction label="Rules" icon="book-outline" onPress={() => router.push("/rules")} />
         {Platform.OS !== "web" ? (
           <>
             <QuickAction label="Admissions" icon="document-text-outline" onPress={() => router.push("/(tabs)/admissions")} />

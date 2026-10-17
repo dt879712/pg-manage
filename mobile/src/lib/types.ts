@@ -190,6 +190,7 @@ export interface TenantBranding {
   phone?: string | null;
   email?: string | null;
   receiptFooter?: string | null;
+  rules?: string | null;
   upiId?: string | null;
   upiQrUrl?: string | null;
   bankName?: string | null;

@@ -85,6 +85,9 @@ export function ParentHome({ name }: { name: string }) {
         <View style={{ flex: 1 }}>
           <Button label="My messages" variant="ghost" icon="chatbubbles-outline" onPress={() => router.push("/messages")} />
         </View>
+        <View style={{ flex: 1 }}>
+          <Button label="Rules" variant="ghost" icon="book-outline" onPress={() => router.push("/rules")} />
+        </View>
       </Row>
       <AnnouncementsCard />
     </ScrollView>

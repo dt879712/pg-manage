@@ -134,6 +134,14 @@ function ProfileView() {
       ) : null}
 
       <Button
+        label="Rules & regulations"
+        variant="ghost"
+        size="sm"
+        icon="document-text-outline"
+        onPress={() => router.push("/rules")}
+      />
+
+      <Button
         label="Privacy policy"
         variant="ghost"
         size="sm"

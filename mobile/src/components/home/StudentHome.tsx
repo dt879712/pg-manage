@@ -66,6 +66,9 @@ export function StudentHome({ name }: { name: string }) {
         <View style={{ flex: 1 }}>
           <Button label="Message owner" icon="chatbubble-outline" variant="ghost" onPress={() => router.push("/message/new")} />
         </View>
+        <View style={{ flex: 1 }}>
+          <Button label="Rules" icon="book-outline" variant="ghost" onPress={() => router.push("/rules")} />
+        </View>
       </Row>
       <AnnouncementsCard />
     </ScrollView>
