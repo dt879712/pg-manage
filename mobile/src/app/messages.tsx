@@ -21,6 +21,7 @@ import {
   rowCard,
 } from "@/components/ui";
 import { DesktopShell } from "@/components/shell";
+import { TopBar } from "@/components/topbar";
 import { useAuth } from "@/lib/auth";
 import { markMessageRead } from "@/lib/endpoints";
 import { expiresIn, shortDate, timeAgo, timeOf } from "@/lib/format";
@@ -205,6 +206,8 @@ function MessageDetail({
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <TopBar />
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.bg }}
         contentContainerStyle={{
@@ -296,6 +299,7 @@ function MessageDetail({
           )}
         </View>
       </ScrollView>
+      </View>
     </Modal>
   );
 }

@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Badge, Button, Empty, ErrorText, Loading, Muted, Row, rowCard, statusTone } from "@/components/ui";
 import { DesktopShell } from "@/components/shell";
+import { TopBar } from "@/components/topbar";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { addBed, createRoom, deleteRoom } from "@/lib/endpoints";
@@ -236,6 +237,8 @@ function AddRoomModal({
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <TopBar />
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.bg }}
         contentContainerStyle={{ padding: space(4), gap: space(3) }}
@@ -289,6 +292,7 @@ function AddRoomModal({
           <Button label="Create room" loading={busy} onPress={submit} />
         </Row>
       </ScrollView>
+      </View>
     </Modal>
   );
 }

@@ -24,6 +24,7 @@ import {
   statusTone,
 } from "@/components/ui";
 import { DesktopShell } from "@/components/shell";
+import { TopBar } from "@/components/topbar";
 import { approveAdmission, rejectAdmission } from "@/lib/endpoints";
 import { fullName, shortDate } from "@/lib/format";
 import { radius, space } from "@/lib/theme";
@@ -169,6 +170,8 @@ function AdmissionDetail({
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <TopBar />
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.bg }}
         contentContainerStyle={{ padding: space(4), gap: space(4), paddingBottom: space(12), alignItems: "center" }}
@@ -317,6 +320,7 @@ function AdmissionDetail({
         )}
         </View>
       </ScrollView>
+      </View>
     </Modal>
   );
 }

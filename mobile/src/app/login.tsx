@@ -36,6 +36,12 @@ export default function Login() {
 
   const isWide = Platform.OS === "web" && width >= 860;
 
+  const scrollRef = useRef<ScrollView>(null);
+  const [formY, setFormY] = useState(0);
+  const focusForm = () => {
+    if (!isWide) scrollRef.current?.scrollTo({ y: Math.max(0, formY - 12), animated: true });
+  };
+
   useEffect(() => {
     setRetryListener((attempt, max) => {
       setNotice(`Waking up the server… retrying (${attempt + 1}/${max}). This can take up to a minute.`);
@@ -79,17 +85,17 @@ export default function Login() {
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={{
-        flex: 1,
-        padding: space(8),
+        flex: isWide ? 1 : 0,
+        padding: isWide ? space(8) : space(6),
         gap: space(2),
-        alignItems: isWide ? "flex-start" : "flex-start",
+        alignItems: "flex-start",
         justifyContent: isWide ? "center" : "flex-start",
-        paddingTop: isWide ? undefined : space(16),
+        paddingTop: isWide ? undefined : space(8),
       }}
     >
-      <Logo size={72} />
-      <Text style={{ fontSize: 30, fontWeight: "800", color: "#FFFFFF" }}>Dev Hostel</Text>
-      <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 15, maxWidth: 340 }}>
+      <Logo size={isWide ? 72 : 56} />
+      <Text style={{ fontSize: isWide ? 30 : 24, fontWeight: "800", color: "#FFFFFF" }}>Dev Hostel</Text>
+      <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: isWide ? 15 : 14, maxWidth: 340 }}>
         Sign in to manage your hostel — students, rooms, fees and attendance in one place.
       </Text>
     </LinearGradient>
@@ -97,6 +103,7 @@ export default function Login() {
 
   const formPanel = (
     <View
+      onLayout={(e) => setFormY(e.nativeEvent.layout.y)}
       style={{
         flex: isWide ? 1 : undefined,
         padding: space(4),
@@ -111,6 +118,7 @@ export default function Login() {
           <TextInput
             value={email}
             onChangeText={setEmail}
+            onFocus={focusForm}
             autoCapitalize="none"
             keyboardType="email-address"
             style={[inputStyle, { borderColor: colors.border, color: colors.text, backgroundColor: colors.bg }]}
@@ -124,6 +132,7 @@ export default function Login() {
             <TextInput
               value={password}
               onChangeText={setPassword}
+              onFocus={focusForm}
               secureTextEntry={!showPassword}
               style={[inputStyle, { borderColor: colors.border, color: colors.text, backgroundColor: colors.bg }]}
               placeholder="••••••"
@@ -195,7 +204,7 @@ export default function Login() {
       style={{ flex: 1, backgroundColor: colors.bg }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+      <ScrollView ref={scrollRef} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
         {gradientPanel}
         {formPanel}
       </ScrollView>

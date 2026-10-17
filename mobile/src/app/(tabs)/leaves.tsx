@@ -24,6 +24,7 @@ import {
   type Tone,
 } from "@/components/ui";
 import { DesktopShell } from "@/components/shell";
+import { TopBar } from "@/components/topbar";
 import { useAuth } from "@/lib/auth";
 import { approveLeave, cancelLeave, rejectLeave } from "@/lib/endpoints";
 import { shortDate } from "@/lib/format";
@@ -216,6 +217,8 @@ function LeaveDetail({
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <TopBar />
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.bg }}
         contentContainerStyle={{
@@ -293,6 +296,7 @@ function LeaveDetail({
           )}
         </View>
       </ScrollView>
+      </View>
     </Modal>
   );
 }

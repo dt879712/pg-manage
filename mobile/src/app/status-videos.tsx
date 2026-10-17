@@ -15,6 +15,7 @@ import {
   rowCard,
 } from "@/components/ui";
 import { DesktopShell } from "@/components/shell";
+import { TopBar } from "@/components/topbar";
 import { useAuth } from "@/lib/auth";
 import { timeAgo } from "@/lib/format";
 import { radius, space } from "@/lib/theme";
@@ -150,6 +151,7 @@ function VideoModal({ video, onClose }: { video: StatusVideo; onClose: () => voi
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <TopBar />
         <View style={{ padding: space(4), gap: space(2), maxWidth: 720, width: "100%", alignSelf: "center" }}>
           <Row between>
             <Text style={{ fontWeight: "800", fontSize: 18, color: colors.text }}>

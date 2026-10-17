@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Alert, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Badge, Button, Empty, ErrorText, Muted, Row, SkeletonRows, Stat, statusTone } from "@/components/ui";
 import { DesktopShell } from "@/components/shell";
+import { TopBar } from "@/components/topbar";
 import { PaymentInfo } from "@/components/payment";
 import { useAuth } from "@/lib/auth";
 import { createPayment } from "@/lib/endpoints";
@@ -435,6 +436,7 @@ function FeesView() {
     {preview ? (
       <Modal visible animationType="slide" onRequestClose={() => setPreview(null)}>
         <View style={{ flex: 1, backgroundColor: colors.bg }}>
+          <TopBar />
           <View style={[styles.previewBar, { borderBottomColor: colors.border }]}>
             <View style={{ flex: 1 }}>
               <Text style={{ fontWeight: "700", fontSize: 16, color: colors.text }}>Fee receipt</Text>
