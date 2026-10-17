@@ -40,11 +40,12 @@ export function OwnerHome() {
   const beds = roomList.flatMap((r) => r.beds ?? []);
   const occupied = beds.filter((b) => b.status === "OCCUPIED").length;
   const list = invoices.data?.invoices ?? [];
-  const pending = list.filter((i) => i.status === "PENDING" || i.status === "PARTIAL");
-  const due = pending.reduce(
-    (sum, i) => sum + (i.amount - (i.payments ?? []).reduce((s, p) => s + p.amount, 0)),
-    0
-  );
+  const due = list
+    .filter((i) => i.status !== "CANCELLED")
+    .reduce(
+      (sum, i) => sum + Math.max(i.amount - (i.payments ?? []).reduce((s, p) => s + p.amount, 0), 0),
+      0
+    );
 
   return (
     <ScrollView contentContainerStyle={{ padding: space(4), gap: space(4) }}>
@@ -98,17 +99,26 @@ export function OwnerHome() {
         </Row>
         {loading ? <SkeletonRows count={5} /> : null}
         {!loading &&
-          list.slice(0, 5).map((inv) => (
-            <Row key={inv.id} between>
-              <View>
-                <Text style={{ color: colors.text, fontWeight: "600" }}>{inv.title}</Text>
-                <Muted>
-                  {money(inv.amount)} · {shortDate(inv.createdAt)}
-                </Muted>
-              </View>
-              <Badge label={inv.status} tone={statusTone(inv.status)} />
-            </Row>
-          ))}
+          list.slice(0, 5).map((inv) => {
+            const paid = (inv.payments ?? []).reduce((s, p) => s + p.amount, 0);
+            const outstanding = Math.max(inv.amount - paid, 0);
+            const label =
+              outstanding <= 0 && inv.status !== "CANCELLED" ? "PAID" : inv.status;
+            return (
+              <Row key={inv.id} between>
+                <View>
+                  <Text style={{ color: colors.text, fontWeight: "600" }}>{inv.title}</Text>
+                  <Muted>
+                    {outstanding > 0
+                      ? `${money(outstanding)} due of ${money(inv.amount)}`
+                      : `${money(inv.amount)} paid`}{" "}
+                    · {shortDate(inv.createdAt)}
+                  </Muted>
+                </View>
+                <Badge label={label} tone={statusTone(label)} />
+              </Row>
+            );
+          })}
         {!loading && list.length === 0 ? <Muted>No invoices yet</Muted> : null}
       </Card>
     </ScrollView>
