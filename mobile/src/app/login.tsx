@@ -19,13 +19,6 @@ import { useAuth } from "@/lib/auth";
 import { ApiError, setRetryListener } from "@/lib/api";
 import { radius, shadow, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
-import type { Role } from "@/lib/types";
-
-const DEMO: { role: Role; label: string; email: string; password: string }[] = [
-  { role: "STAFF", label: "Staff", email: "staff1@test.com", password: "staff123" },
-  { role: "STUDENT", label: "Student", email: "rahul.student@test.com", password: "student123" },
-  { role: "PARENT", label: "Parent", email: "parent1@test.com", password: "parent123" },
-];
 
 export default function Login() {
   const { colors } = useTheme();
@@ -185,26 +178,6 @@ export default function Login() {
           </Text>
         </Pressable>
       </Card>
-
-      <View style={{ gap: space(3) }}>
-        <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center" }}>
-          Quick demo logins
-        </Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space(2) }}>
-          {DEMO.map((d) => (
-            <View key={d.role} style={{ flexGrow: 1, flexBasis: 82 }}>
-              <Button
-                label={d.label}
-                variant="ghost"
-                onPress={() => {
-                  setEmail(d.email);
-                  setPassword(d.password);
-                }}
-              />
-            </View>
-          ))}
-        </View>
-      </View>
     </View>
   );
 
