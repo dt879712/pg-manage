@@ -278,7 +278,8 @@ function AddRoomModal({
             ))}
           </View>
         </View>
-        <Field label="Rent / month (₹)" value={rent} onChangeText={setRent} keyboardType="number-pad" placeholder="e.g. 7000" />
+        <Field label="Default rent / month (₹, optional)" value={rent} onChangeText={setRent} keyboardType="number-pad" placeholder="e.g. 7000" />
+        <Muted style={{ fontSize: 12 }}>Used only to prefill a student&apos;s fee. Fees are charged per student.</Muted>
         {capacity ? (
           <Pressable onPress={() => setBeds(!beds)}>
             <Text style={{ color: beds ? colors.primary : colors.muted }}>

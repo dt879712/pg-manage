@@ -24,6 +24,7 @@ const studentBody = z.object({
   guardianName: z.string().optional(),
   guardianPhone: z.string().optional(),
   guardianEmail: z.string().optional(),
+  monthlyFee: z.number().int().nonnegative().nullable().optional(),
   roomId: z.string().optional(),
   bedId: z.string().optional(),
   joinDate: z.coerce.date().optional(),
@@ -118,6 +119,7 @@ studentsRouter.post("/", async (req, res, next) => {
           guardianName: body.guardianName,
           guardianPhone: body.guardianPhone,
           guardianEmail: body.guardianEmail,
+          monthlyFee: body.monthlyFee ?? undefined,
           joinDate: body.joinDate,
           tenantId,
           roomId: placement.roomId,
@@ -240,6 +242,7 @@ studentsRouter.patch("/:id", async (req, res, next) => {
           guardianName: body.guardianName,
           guardianPhone: body.guardianPhone,
           guardianEmail: body.guardianEmail,
+          monthlyFee: body.monthlyFee,
         },
       });
     });

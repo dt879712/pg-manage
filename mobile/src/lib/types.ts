@@ -52,6 +52,7 @@ export interface Student {
   guardianName?: string | null;
   guardianPhone?: string | null;
   guardianEmail?: string | null;
+  monthlyFee?: number | null;
 }
 
 export interface StudentDetail extends Student {

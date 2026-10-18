@@ -257,7 +257,11 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId!;
     const body = z
-      .object({ roomId: z.string().optional(), bedId: z.string().optional() })
+      .object({
+        roomId: z.string().optional(),
+        bedId: z.string().optional(),
+        monthlyFee: z.number().int().nonnegative().optional(),
+      })
       .parse(req.body ?? {});
 
     const request = await prisma.admissionRequest.findFirst({
@@ -311,6 +315,7 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
           guardianName: request.guardianName,
           guardianPhone: request.guardianPhone,
           guardianEmail: request.guardianEmail,
+          monthlyFee: body.monthlyFee ?? undefined,
           roomId,
           bedId,
           createdById: req.user!.sub,

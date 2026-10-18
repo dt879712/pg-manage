@@ -135,6 +135,7 @@ function AdmissionDetail({
   const { data: roomsData } = useApi<{ rooms: Room[] }>("/rooms");
   const [roomId, setRoomId] = useState<string | null>(null);
   const [bedId, setBedId] = useState<string | null>(null);
+  const [fee, setFee] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<null | "approve" | "reject">(null);
   const [err, setErr] = useState<string | null>(null);
@@ -148,7 +149,11 @@ function AdmissionDetail({
     setBusy("approve");
     setErr(null);
     try {
-      await approveAdmission(id, { roomId: roomId ?? undefined, bedId: bedId ?? undefined });
+      await approveAdmission(id, {
+        roomId: roomId ?? undefined,
+        bedId: bedId ?? undefined,
+        monthlyFee: fee.trim() ? Math.max(0, parseInt(fee.replace(/\D/g, ""), 10) || 0) : undefined,
+      });
       onDone();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to approve");
@@ -236,6 +241,7 @@ function AdmissionDetail({
                         onPress={() => {
                           setRoomId(r.id);
                           setBedId(null);
+                          if (!fee.trim() && r.rentAmount != null) setFee(String(r.rentAmount));
                         }}
                         style={[
                           chipStyle,
@@ -275,6 +281,23 @@ function AdmissionDetail({
                       {beds.length === 0 ? <Muted>No beds in this room (can still allot the room)</Muted> : null}
                     </View>
                   ) : null}
+                  <View style={{ gap: 6 }}>
+                    <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                      MONTHLY FEE (₹)
+                    </Text>
+                    <TextInput
+                      value={fee}
+                      onChangeText={setFee}
+                      placeholder="e.g. 7000"
+                      placeholderTextColor={colors.muted}
+                      keyboardType="number-pad"
+                      style={[
+                        inputStyle,
+                        { borderColor: colors.border, color: colors.text, backgroundColor: colors.bg },
+                      ]}
+                    />
+                    <Muted style={{ fontSize: 12 }}>Charged per student. Picking a room prefills its rent.</Muted>
+                  </View>
                   <Muted style={{ fontSize: 12 }}>
                     Room only = allot whole room; pick a bed for shared rooms. Student gets notified on approval.
                   </Muted>

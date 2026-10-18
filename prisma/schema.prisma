@@ -315,6 +315,7 @@ model Student {
   guardianName  String?
   guardianPhone String?
   guardianEmail String?
+  monthlyFee    Int?
   joinDate      DateTime      @default(now())
   exitDate      DateTime?
   status        StudentStatus @default(ACTIVE)

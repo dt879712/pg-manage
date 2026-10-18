@@ -3,7 +3,7 @@ import { FlatList, Pressable, RefreshControl, Text, TextInput, View } from "reac
 import { useRouter } from "expo-router";
 import { Badge, Button, Empty, ErrorText, Loading, Muted, rowCard, statusTone } from "@/components/ui";
 import { DesktopShell } from "@/components/shell";
-import { fullName } from "@/lib/format";
+import { fullName, money } from "@/lib/format";
 import { radius, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import type { Student } from "@/lib/types";
@@ -76,6 +76,7 @@ function StudentsView() {
                 </Text>
                 <Muted numberOfLines={1}>
                   {item.room?.roomNumber ? `Room ${item.room.roomNumber}` : "No room"}
+                  {item.monthlyFee != null ? ` · ${money(item.monthlyFee)}/mo` : ""}
                 </Muted>
               </View>
               {item.phone ? (

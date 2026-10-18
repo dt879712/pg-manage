@@ -102,6 +102,7 @@ export interface CreateStudentInput {
   guardianName?: string;
   guardianPhone?: string;
   guardianEmail?: string;
+  monthlyFee?: number;
   photoUrl?: string;
   roomId?: string;
   bedId?: string;
@@ -207,7 +208,10 @@ export function getAdmission(id: string) {
   return api<{ admission: Admission }>(`/admissions/${id}`);
 }
 
-export function approveAdmission(id: string, body: { roomId?: string; bedId?: string }) {
+export function approveAdmission(
+  id: string,
+  body: { roomId?: string; bedId?: string; monthlyFee?: number }
+) {
   return api<{ ok: boolean; studentId: string }>(`/admissions/${id}/approve`, {
     method: "POST",
     body,

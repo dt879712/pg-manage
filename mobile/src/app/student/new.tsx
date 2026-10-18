@@ -31,6 +31,7 @@ export default function NewStudent() {
   const [parentIdDoc, setParentIdDoc] = useState<PickedImage | null>(null);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [bedId, setBedId] = useState<string | null>(null);
+  const [fee, setFee] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -51,6 +52,9 @@ export default function NewStudent() {
         guardianPhone: guardianPhone.trim() || undefined,
         guardianEmail: guardianEmail.trim() || undefined,
         photoUrl: photo?.dataUrl,
+        monthlyFee: fee.trim()
+          ? Math.max(0, parseInt(fee.replace(/\D/g, ""), 10) || 0)
+          : undefined,
         roomId: roomId ?? undefined,
         bedId: bedId ?? undefined,
       });
@@ -169,6 +173,19 @@ export default function NewStudent() {
       </Card>
 
       <Card style={{ gap: space(3) }}>
+        <Text style={labelStyle}>Monthly fee (₹)</Text>
+        <TextInput
+          value={fee}
+          onChangeText={setFee}
+          placeholder="e.g. 7000"
+          placeholderTextColor={colors.muted}
+          keyboardType="number-pad"
+          style={input}
+        />
+        <Muted>Charged per student, not per room. Picking a room prefills its default rent.</Muted>
+      </Card>
+
+      <Card style={{ gap: space(3) }}>
         <Text style={labelStyle}>Room / bed (optional)</Text>
         <View style={styles.chips}>
           {rooms.map((r) => (
@@ -177,6 +194,7 @@ export default function NewStudent() {
               onPress={() => {
                 setRoomId(r.id);
                 setBedId(null);
+                if (!fee.trim() && r.rentAmount != null) setFee(String(r.rentAmount));
               }}
               style={[
                 styles.chip,

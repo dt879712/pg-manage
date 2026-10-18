@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Badge, Button, Card, ErrorText, Loading, Muted, Row, statusTone } from "@/components/ui";
 import { Avatar, DocumentGallery } from "@/components/documents";
@@ -38,12 +38,68 @@ export default function StudentDetailScreen() {
   const [loginErr, setLoginErr] = useState<string | null>(null);
   const [docBusy, setDocBusy] = useState(false);
   const [formBusy, setFormBusy] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editBusy, setEditBusy] = useState(false);
+  const [ef, setEf] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    address: "",
+    guardianName: "",
+    guardianPhone: "",
+    guardianEmail: "",
+    fee: "",
+  });
 
   if (loading) return <Loading />;
   const s = data?.student;
   if (!s) return <ErrorText>{error || "Not found"}</ErrorText>;
 
   const canDelete = confirm.trim().toLowerCase() === s.firstName.toLowerCase();
+
+  const openEdit = () => {
+    setEf({
+      firstName: s.firstName ?? "",
+      lastName: s.lastName ?? "",
+      phone: s.phone ?? "",
+      address: s.address ?? "",
+      guardianName: s.guardianName ?? "",
+      guardianPhone: s.guardianPhone ?? "",
+      guardianEmail: s.guardianEmail ?? "",
+      fee: s.monthlyFee != null ? String(s.monthlyFee) : "",
+    });
+    setErr(null);
+    setEditOpen(true);
+  };
+
+  const saveEdit = async () => {
+    if (ef.firstName.trim().length === 0) {
+      setErr("First name is required.");
+      return;
+    }
+    setEditBusy(true);
+    setErr(null);
+    try {
+      await updateStudent(s.id, {
+        firstName: ef.firstName.trim(),
+        lastName: ef.lastName.trim() || undefined,
+        phone: ef.phone.trim() || undefined,
+        address: ef.address.trim() || undefined,
+        guardianName: ef.guardianName.trim() || undefined,
+        guardianPhone: ef.guardianPhone.trim() || undefined,
+        guardianEmail: ef.guardianEmail.trim() || undefined,
+        monthlyFee: ef.fee.trim()
+          ? Math.max(0, parseInt(ef.fee.replace(/\D/g, ""), 10) || 0)
+          : null,
+      });
+      setEditOpen(false);
+      reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setEditBusy(false);
+    }
+  };
 
   const remove = async () => {
     setBusy(true);
@@ -193,6 +249,8 @@ export default function StudentDetailScreen() {
         <Detail label="Guardian" value={s.guardianName ?? "-"} />
         <Detail label="Guardian phone" value={s.guardianPhone ?? "-"} />
         <Detail label="Guardian email" value={s.guardianEmail ?? "-"} />
+        <Detail label="Monthly fee" value={s.monthlyFee != null ? `${money(s.monthlyFee)} / month` : "-"} />
+        <Button label="Edit profile & fee" icon="create-outline" onPress={openEdit} />
         <Button
           label={s.photoUrl ? "Change photo" : "Add photo"}
           variant="ghost"
@@ -367,6 +425,53 @@ export default function StudentDetailScreen() {
           onPress={remove}
         />
       </Card>
+
+      {editOpen ? (
+        <Modal visible transparent animationType="slide" onRequestClose={() => setEditOpen(false)}>
+          <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}>
+            <Pressable style={{ flex: 1 }} onPress={() => setEditOpen(false)} />
+            <View
+              style={{
+                backgroundColor: colors.card,
+                borderTopLeftRadius: radius.lg,
+                borderTopRightRadius: radius.lg,
+                borderTopWidth: 1,
+                borderColor: colors.border,
+                padding: space(4),
+                gap: space(3),
+                maxHeight: "88%",
+              }}
+            >
+              <Row between>
+                <Text style={{ fontWeight: "800", fontSize: 16, color: colors.text }}>
+                  Edit profile &amp; fee
+                </Text>
+                <Pressable hitSlop={8} onPress={() => setEditOpen(false)}>
+                  <Text style={{ color: colors.muted, fontSize: 14 }}>Close</Text>
+                </Pressable>
+              </Row>
+              <ScrollView contentContainerStyle={{ gap: space(3), paddingBottom: space(2) }}>
+                <TextInput value={ef.firstName} onChangeText={(v) => setEf((p) => ({ ...p, firstName: v }))} placeholder="First name" placeholderTextColor={colors.muted} style={input} />
+                <TextInput value={ef.lastName} onChangeText={(v) => setEf((p) => ({ ...p, lastName: v }))} placeholder="Last name" placeholderTextColor={colors.muted} style={input} />
+                <TextInput value={ef.phone} onChangeText={(v) => setEf((p) => ({ ...p, phone: v }))} placeholder="Phone" placeholderTextColor={colors.muted} keyboardType="phone-pad" style={input} />
+                <TextInput value={ef.address} onChangeText={(v) => setEf((p) => ({ ...p, address: v }))} placeholder="Address" placeholderTextColor={colors.muted} style={[input, { minHeight: 60, textAlignVertical: "top" }]} multiline />
+                <TextInput value={ef.guardianName} onChangeText={(v) => setEf((p) => ({ ...p, guardianName: v }))} placeholder="Guardian name" placeholderTextColor={colors.muted} style={input} />
+                <TextInput value={ef.guardianPhone} onChangeText={(v) => setEf((p) => ({ ...p, guardianPhone: v }))} placeholder="Guardian phone" placeholderTextColor={colors.muted} keyboardType="phone-pad" style={input} />
+                <TextInput value={ef.guardianEmail} onChangeText={(v) => setEf((p) => ({ ...p, guardianEmail: v }))} placeholder="Guardian email" placeholderTextColor={colors.muted} autoCapitalize="none" keyboardType="email-address" style={input} />
+                <View style={{ gap: 2 }}>
+                  <TextInput value={ef.fee} onChangeText={(v) => setEf((p) => ({ ...p, fee: v }))} placeholder="Monthly fee (₹)" placeholderTextColor={colors.muted} keyboardType="number-pad" style={input} />
+                  <Muted>Increase this when rent rises. Leave blank to clear.</Muted>
+                </View>
+              </ScrollView>
+              <ErrorText>{err}</ErrorText>
+              <Row style={{ gap: space(3) }}>
+                <Button label="Cancel" variant="ghost" onPress={() => setEditOpen(false)} />
+                <Button label="Save changes" loading={editBusy} onPress={saveEdit} />
+              </Row>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </ScrollView>
   );
 }
