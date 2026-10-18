@@ -6,9 +6,15 @@ import Constants from "expo-constants";
 // or change it in-app from the Profile screen.
 const devHost = (Constants.expoConfig?.hostUri ?? "").split(":")[0];
 
+const PRODUCTION_API_URL = "https://dev-hostel-api.onrender.com";
+
 const DEFAULT_API_URL =
   process.env.EXPO_PUBLIC_API_URL ??
-  (devHost ? `http://${devHost}:4000` : "http://localhost:4000");
+  (devHost
+    ? `http://${devHost}:4000`
+    : __DEV__
+      ? "http://localhost:4000"
+      : PRODUCTION_API_URL);
 
 let apiUrl = DEFAULT_API_URL;
 
@@ -16,9 +22,30 @@ export function getApiUrl(): string {
   return apiUrl;
 }
 
+// Localhost / LAN addresses only work on the developer's own network. A shipped
+// app must ignore any such value saved during development so it keeps working on
+// any network.
+function isPrivateApiUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "0.0.0.0" ||
+      host === "::1" ||
+      host.endsWith(".local") ||
+      /^10\./.test(host) ||
+      /^192\.168\./.test(host) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function loadApiUrl(): Promise<void> {
   const saved = await AsyncStorage.getItem("pg_manage_api_url");
-  if (saved) apiUrl = saved.replace(/\/+$/, "");
+  if (saved && (__DEV__ || !isPrivateApiUrl(saved))) apiUrl = saved.replace(/\/+$/, "");
 }
 
 export async function setApiUrl(url: string): Promise<void> {
