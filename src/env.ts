@@ -18,6 +18,10 @@ export const env = {
   smtpPass: process.env.SMTP_PASS ?? "",
   brevoApiKey: process.env.BREVO_API_KEY ?? "",
   expoAccessToken: process.env.EXPO_ACCESS_TOKEN ?? "",
+  // Firebase Cloud Messaging (HTTP v1). Either a raw/minified service-account
+  // JSON string, or the same JSON base64-encoded. May also be stored in the
+  // AppConfig table under the "fcm_service_account" key.
+  fcmServiceAccount: process.env.FCM_SERVICE_ACCOUNT ?? "",
   mailFrom: process.env.MAIL_FROM ?? "Dev Hostel <no-reply@devhostel.app>",
   resetUrlBase: process.env.RESET_URL_BASE ?? "http://localhost:8083",
   // Comma-separated allowed browser origins, or "*" for all.

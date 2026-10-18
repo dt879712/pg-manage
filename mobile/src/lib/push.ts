@@ -40,8 +40,8 @@ function projectId(): string | undefined {
   return Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
 }
 
-/** Requests permission and returns an Expo push token, or null if unavailable. */
-export async function getPushToken(): Promise<string | null> {
+/** Requests permission and returns a push token + platform, or null if unavailable. */
+export async function getPushToken(): Promise<{ token: string; platform: string } | null> {
   if (Platform.OS === "web") return null;
   try {
     const [Device, Notifications] = await Promise.all([loadDevice(), loadNotifications()]);
@@ -70,11 +70,16 @@ export async function getPushToken(): Promise<string | null> {
       });
     }
 
+    if (Platform.OS === "android") {
+      const native = await Notifications.getDevicePushTokenAsync();
+      return { token: native.data, platform: "android" };
+    }
+
     const pid = projectId();
     if (!pid) return null;
 
     const token = await Notifications.getExpoPushTokenAsync({ projectId: pid });
-    return token.data;
+    return { token: token.data, platform: Platform.OS };
   } catch {
     return null;
   }
@@ -83,11 +88,11 @@ export async function getPushToken(): Promise<string | null> {
 /** Registers this device's push token with the backend. Safe to call repeatedly. */
 export async function syncPushToken(): Promise<void> {
   try {
-    const token = await getPushToken();
-    if (!token) return;
+    const registration = await getPushToken();
+    if (!registration) return;
     await api("/notifications/register-device", {
       method: "POST",
-      body: { token, platform: Platform.OS },
+      body: registration,
     });
   } catch {
     // Push is best-effort; never block the app on it.

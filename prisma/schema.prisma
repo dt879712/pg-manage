@@ -674,3 +674,11 @@ model PasswordResetToken {
   @@index([userId])
   @@map("password_reset_tokens")
 }
+
+model AppConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("app_config")
+}
