@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { Badge, Button, Card, ErrorText, Hero, Muted, Row, Skeleton, SkeletonRows, statusTone } from "@/components/ui";
 import { AnnouncementsCard, TenantBanner } from "@/components/branding";
+import { MyDocumentsCard } from "@/components/documents";
 import { money, shortDate, timeOf, greeting } from "@/lib/format";
 import { space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
@@ -86,6 +87,7 @@ export function ParentHome({ name }: { name: string }) {
           <Button label="Rules" variant="ghost" icon="book-outline" onPress={() => router.push("/rules")} />
         </View>
       </Row>
+      <MyDocumentsCard />
       <AnnouncementsCard />
     </ScrollView>
   );

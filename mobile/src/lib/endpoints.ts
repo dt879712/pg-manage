@@ -132,6 +132,12 @@ export function deleteDocument(id: string) {
   return api<{ ok: boolean }>(`/documents/${id}`, { method: "DELETE" });
 }
 
+export function getMyDocuments() {
+  return api<{ people: { studentId: string; name: string; documents: DocumentFile[] }[] }>(
+    "/documents/mine"
+  );
+}
+
 export function getTenant() {
   return api<{ tenant: TenantBranding }>("/tenant");
 }

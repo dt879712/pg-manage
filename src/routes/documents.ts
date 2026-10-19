@@ -4,11 +4,13 @@ import { prisma } from "../prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { requireTenant } from "../middleware/tenant";
 import { storeMedia, resolveMediaUrl, deleteMedia } from "../lib/fileStore";
+import { getStudentForUser, getParentStudentIds } from "../lib/scope";
 
 export const documentsRouter = Router();
 
-// Documents contain ID proofs / photos -> Owner-only, tenant-scoped.
-documentsRouter.use(requireAuth, requireTenant, requireRole("OWNER"));
+// Tenant-scoped. Owners manage any document; students and parents may only
+// upload/view documents for themselves or their linked children.
+documentsRouter.use(requireAuth, requireTenant);
 
 const docBody = z.object({
   studentId: z.string().optional(),
@@ -19,10 +21,94 @@ const docBody = z.object({
   mimeType: z.string().optional(),
 });
 
-documentsRouter.post("/", async (req, res, next) => {
+// Documents visible to the signed-in student/parent, grouped by person.
+documentsRouter.get(
+  "/mine",
+  requireRole("STUDENT", "PARENT"),
+  async (req, res, next) => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const role = req.user!.role;
+
+      let ids: string[];
+      if (role === "STUDENT") {
+        const s = await getStudentForUser(req.user!.sub);
+        ids = s ? [s.id] : [];
+      } else {
+        ids = await getParentStudentIds(req.user!.sub);
+      }
+
+      const students = await prisma.student.findMany({
+        where: { id: { in: ids }, tenantId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          documents: { orderBy: { createdAt: "desc" } },
+        },
+      });
+
+      const people = await Promise.all(
+        students.map(async (s) => ({
+          studentId: s.id,
+          name: `${s.firstName} ${s.lastName ?? ""}`.trim(),
+          documents: await Promise.all(
+            s.documents.map(async (d) => ({ ...d, fileUrl: await resolveMediaUrl(d.fileUrl) }))
+          ),
+        }))
+      );
+
+      res.json({ people });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+documentsRouter.post(
+  "/",
+  requireRole("OWNER", "STUDENT", "PARENT"),
+  async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId!;
+    const role = req.user!.role;
     const body = docBody.parse(req.body);
+
+    if (role === "STUDENT") {
+      const s = await getStudentForUser(req.user!.sub);
+      if (!s) {
+        res.status(403).json({ error: "No student profile is linked to this login" });
+        return;
+      }
+      if (body.userId) {
+        res.status(400).json({ error: "Provide only one of studentId or userId" });
+        return;
+      }
+      if (body.studentId && body.studentId !== s.id) {
+        res.status(403).json({ error: "You can only upload documents for yourself" });
+        return;
+      }
+      body.studentId = s.id;
+    } else if (role === "PARENT") {
+      if (body.userId) {
+        res.status(400).json({ error: "Provide only one of studentId or userId" });
+        return;
+      }
+      const ids = await getParentStudentIds(req.user!.sub);
+      if (!body.studentId) {
+        if (ids.length === 1) {
+          body.studentId = ids[0];
+        } else {
+          res.status(400).json({ error: "studentId is required" });
+          return;
+        }
+      }
+      if (!ids.includes(body.studentId)) {
+        res.status(403).json({ error: "You can only upload documents for your child" });
+        return;
+      }
+    }
+
     if (!body.studentId && !body.userId) {
       res.status(400).json({ error: "studentId or userId is required" });
       return;
@@ -82,7 +168,7 @@ documentsRouter.post("/", async (req, res, next) => {
   }
 });
 
-documentsRouter.get("/", async (req, res, next) => {
+documentsRouter.get("/", requireRole("OWNER"), async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId!;
     const studentId = req.query.studentId as string | undefined;
@@ -104,13 +190,17 @@ documentsRouter.get("/", async (req, res, next) => {
   }
 });
 
-documentsRouter.delete("/:id", async (req, res, next) => {
+documentsRouter.delete("/:id", requireRole("OWNER", "STUDENT", "PARENT"), async (req, res, next) => {
   try {
     const existing = await prisma.document.findFirst({
       where: { id: req.params.id as string, tenantId: req.user!.tenantId! },
     });
     if (!existing) {
       res.status(404).json({ error: "Not found" });
+      return;
+    }
+    if (req.user!.role !== "OWNER" && existing.uploadedById !== req.user!.sub) {
+      res.status(403).json({ error: "You can only remove documents you uploaded" });
       return;
     }
     await prisma.document.delete({ where: { id: existing.id } });

@@ -247,21 +247,25 @@ export function profileFormHtml(r: ProfileFormInput): string {
   return document("Profile", head, body);
 }
 
-function downloadPdfOnWeb(base64: string, filename: string): void {
-  const link = globalThis.document.createElement("a");
-  link.href = `data:application/pdf;base64,${base64}`;
-  link.download = filename;
-  link.style.display = "none";
-  globalThis.document.body.appendChild(link);
-  link.click();
-  setTimeout(() => link.remove(), 0);
+async function exportPdfOnWeb(html: string, filename: string): Promise<void> {
+  const mod = await import("html2pdf.js");
+  const html2pdf = mod.default ?? mod;
+  await html2pdf()
+    .set({
+      margin: 0,
+      filename,
+      image: { type: "jpeg", quality: 0.95 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
+      jsPDF: { unit: "pt", format: "a4", orientation: "portrait" },
+      pagebreak: { mode: ["css", "legacy"] },
+    })
+    .from(html)
+    .save();
 }
 
 export async function exportPdf(html: string, filename: string): Promise<void> {
   if (Platform.OS === "web") {
-    const { base64 } = await Print.printToFileAsync({ html, base64: true });
-    if (!base64) throw new Error("Could not create the PDF");
-    downloadPdfOnWeb(base64, filename);
+    await exportPdfOnWeb(html, filename);
     return;
   }
 

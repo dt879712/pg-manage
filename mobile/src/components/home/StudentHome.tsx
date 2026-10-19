@@ -2,6 +2,7 @@ import { ScrollView, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Button, Card, ErrorText, Hero, Muted, Row, Skeleton } from "@/components/ui";
 import { AnnouncementsCard, TenantBanner } from "@/components/branding";
+import { MyDocumentsCard } from "@/components/documents";
 import { greeting, timeOf } from "@/lib/format";
 import { space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
@@ -70,6 +71,7 @@ export function StudentHome({ name }: { name: string }) {
           <Button label="Rules" icon="book-outline" variant="ghost" onPress={() => router.push("/rules")} />
         </View>
       </Row>
+      <MyDocumentsCard />
       <AnnouncementsCard />
     </ScrollView>
   );
