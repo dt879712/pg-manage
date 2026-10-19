@@ -47,7 +47,8 @@ services:
     # Rebuilt rarely (password-reset page only) -> deploy manually to save pipeline minutes.
     autoDeploy: false
     rootDir: mobile
-    buildCommand: npm ci && npx expo export --platform web
+    # Also publish the built installers (mobile/downloads) at /downloads/*.
+    buildCommand: npm ci && npx expo export --platform web && mkdir -p dist/downloads && cp -r downloads/. dist/downloads/
     staticPublishPath: dist
     envVars:
       - key: EXPO_PUBLIC_API_URL
