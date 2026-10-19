@@ -290,6 +290,15 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
         res.status(400).json({ error: "That bed is already occupied" });
         return;
       }
+      const occupant = await prisma.student.findFirst({
+        where: { bedId: bed.id, tenantId, status: "ACTIVE" },
+        select: { firstName: true, lastName: true },
+      });
+      if (occupant) {
+        const name = [occupant.firstName, occupant.lastName].filter(Boolean).join(" ");
+        res.status(400).json({ error: `That bed is already occupied${name ? ` by ${name}` : ""}` });
+        return;
+      }
       roomId = bed.roomId;
       bedId = bed.id;
     } else if (body.roomId) {

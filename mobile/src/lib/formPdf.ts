@@ -82,8 +82,9 @@ const fmtDate = (value?: string | null): string => {
 
 const CSS = `
   * { box-sizing: border-box; }
-  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-         color:#0F172A; margin:0; padding:24px; background:#fff; }
+  body { margin:0; background:#fff; }
+  .pdf-body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         color:#0F172A; padding:24px; background:#fff; }
   .head { display:flex; align-items:center; gap:16px; border-bottom:2px solid #0F172A; padding-bottom:14px; }
   .logo { width:64px; height:64px; border-radius:12px; object-fit:cover; }
   .photo { width:72px; height:88px; border-radius:10px; object-fit:cover; border:1px solid #E2E8F0; margin-left:auto; }
@@ -138,8 +139,10 @@ function document(title: string, headHtml: string, bodyHtml: string): string {
 <style>${CSS}</style>
 </head>
 <body>
+<div class="pdf-body">
 ${headHtml}
 ${bodyHtml}
+</div>
 </body>
 </html>`;
 }

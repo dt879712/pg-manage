@@ -224,21 +224,26 @@ export default function NewStudent() {
         </View>
         {selected ? (
           <View style={styles.chips}>
-            {beds.map((b) => (
-              <Pressable
-                key={b.id}
-                onPress={() => setBedId((cur) => (cur === b.id ? null : b.id))}
-                style={[
-                  styles.chip,
-                  { borderColor: colors.border, backgroundColor: colors.bg },
-                  bedId === b.id && { backgroundColor: colors.primarySolid, borderColor: colors.primarySolid },
-                ]}
-              >
-                <Text style={[styles.chipText, { color: bedId === b.id ? colors.onPrimary : colors.text }]}>
-                  {b.label}
-                </Text>
-              </Pressable>
-            ))}
+            {beds.map((b) => {
+              const taken = b.status === "OCCUPIED";
+              return (
+                <Pressable
+                  key={b.id}
+                  disabled={taken}
+                  onPress={() => setBedId((cur) => (cur === b.id ? null : b.id))}
+                  style={[
+                    styles.chip,
+                    { borderColor: colors.border, backgroundColor: colors.bg },
+                    taken && { opacity: 0.4 },
+                    bedId === b.id && { backgroundColor: colors.primarySolid, borderColor: colors.primarySolid },
+                  ]}
+                >
+                  <Text style={[styles.chipText, { color: bedId === b.id ? colors.onPrimary : colors.text }]}>
+                    {b.label}{taken ? " ●" : ""}
+                  </Text>
+                </Pressable>
+              );
+            })}
             {beds.length === 0 ? <Muted>No beds in this room</Muted> : null}
           </View>
         ) : null}

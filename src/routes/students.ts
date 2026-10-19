@@ -38,11 +38,25 @@ const studentCreateBody = studentBody.extend({
 async function resolvePlacement(
   tenantId: string,
   roomId: string | undefined,
-  bedId: string | undefined
+  bedId: string | undefined,
+  currentStudentId?: string
 ): Promise<{ roomId: string | null; bedId: string | null } | { error: string }> {
   if (bedId) {
     const bed = await prisma.bed.findFirst({ where: { id: bedId, tenantId } });
     if (!bed) return { error: "Invalid bed" };
+    const occupant = await prisma.student.findFirst({
+      where: {
+        bedId: bed.id,
+        tenantId,
+        status: "ACTIVE",
+        ...(currentStudentId ? { id: { not: currentStudentId } } : {}),
+      },
+      select: { firstName: true, lastName: true },
+    });
+    if (occupant) {
+      const name = [occupant.firstName, occupant.lastName].filter(Boolean).join(" ");
+      return { error: `That bed is already occupied${name ? ` by ${name}` : ""}` };
+    }
     return { roomId: bed.roomId, bedId: bed.id };
   }
   if (roomId) {
@@ -244,7 +258,7 @@ studentsRouter.patch("/:id", async (req, res, next) => {
     }
 
     const body = studentBody.partial().parse(req.body);
-    const placement = await resolvePlacement(tenantId, body.roomId, body.bedId);
+    const placement = await resolvePlacement(tenantId, body.roomId, body.bedId, existing.id);
     const photoUrl = await storeMaybeDataUrl(tenantId, body.photoUrl, {
       kind: "image",
       folder: "students",
