@@ -8,19 +8,25 @@ import { useTheme } from "@/lib/theme-context";
 import type { Pg } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
 
-// Owner-only strip for switching between the PGs this owner manages. Hidden
-// unless the owner actually has more than one PG.
+// Owner-only strip for choosing which branch (PG) to work in, and for adding
+// new branches. Always visible to owners so a single-branch owner has a way to
+// add their second one.
+const DEFAULT_LIMIT = 4;
+
 export function PgSwitcher() {
   const { colors } = useTheme();
   const { user, switchPg } = useAuth();
-  const { data, loading, error, reload } = useApi<{ pgs: Pg[] }>("/tenant/pgs");
+  const { data, loading, error, reload } = useApi<{ pgs: Pg[]; limit?: number }>(
+    "/tenant/pgs"
+  );
   const [busyId, setBusyId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   if (!user || user.role !== "OWNER") return null;
   const pgs = data?.pgs ?? [];
-  if (!loading && pgs.length < 2 && !creating) return null;
+  const limit = data?.limit ?? DEFAULT_LIMIT;
+  const atLimit = pgs.length >= limit;
 
   const onSwitch = async (pg: Pg) => {
     if (pg.isActive || busyId) return;
@@ -29,15 +35,17 @@ export function PgSwitcher() {
     try {
       await switchPg(pg.id);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not switch PG");
+      setErr(e instanceof Error ? e.message : "Could not switch branch");
     } finally {
       setBusyId(null);
     }
   };
 
+  if (loading && pgs.length === 0 && !creating) return null;
+
   return (
     <Card style={{ gap: space(3) }}>
-      <SectionTitle>Your PGs</SectionTitle>
+      <SectionTitle>Your branches</SectionTitle>
       <Row style={{ flexWrap: "wrap", gap: space(2) }}>
         {pgs.map((pg) => {
           const active = pg.isActive ?? pg.id === user.tenantId;
@@ -69,20 +77,29 @@ export function PgSwitcher() {
             </Pressable>
           );
         })}
-        <Pressable
-          onPress={() => setCreating(true)}
-          style={({ pressed }) => [chip, { borderColor: colors.border, borderStyle: "dashed", opacity: pressed ? 0.85 : 1 }]}
-        >
-          <Text style={{ fontWeight: "700", color: colors.primary }}>+ Add PG</Text>
-        </Pressable>
+        {atLimit ? null : (
+          <Pressable
+            onPress={() => setCreating(true)}
+            style={({ pressed }) => [
+              chip,
+              { borderColor: colors.border, borderStyle: "dashed", opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <Text style={{ fontWeight: "700", color: colors.primary }}>+ Add branch</Text>
+          </Pressable>
+        )}
       </Row>
       <Muted style={{ fontSize: 12 }}>
-        Switching loads that PG&apos;s students, rooms and fees. Settings apply to the active PG.
+        Picking a branch shows only that branch&apos;s students, rooms and fees. Settings apply to
+        the active branch.{" "}
+        {atLimit ? `Maximum of ${limit} branches reached.` : ""}
       </Muted>
       <ErrorText>{error || err}</ErrorText>
 
       {creating ? (
         <CreatePgModal
+          current={pgs.length}
+          limit={limit}
           onClose={() => setCreating(false)}
           onCreated={() => {
             setCreating(false);
@@ -94,7 +111,17 @@ export function PgSwitcher() {
   );
 }
 
-function CreatePgModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function CreatePgModal({
+  onClose,
+  onCreated,
+  current,
+  limit,
+}: {
+  onClose: () => void;
+  onCreated: () => void;
+  current: number;
+  limit: number;
+}) {
   const { colors } = useTheme();
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
@@ -103,17 +130,17 @@ function CreatePgModal({ onClose, onCreated }: { onClose: () => void; onCreated:
 
   const submit = async () => {
     if (!name.trim()) {
-      setErr("Enter a name for the PG");
+      setErr("Enter a name for this branch");
       return;
     }
     setBusy(true);
     setErr(null);
     try {
       await createPg({ name: name.trim(), city: city.trim() || undefined });
-      Alert.alert("PG created", "You can now switch to it and set it up.");
+      Alert.alert("Branch created", "You can now switch to it and set it up.");
       onCreated();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed to create PG");
+      setErr(e instanceof Error ? e.message : "Failed to create branch");
       setBusy(false);
     }
   };
@@ -122,13 +149,16 @@ function CreatePgModal({ onClose, onCreated }: { onClose: () => void; onCreated:
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: colors.bg, padding: space(4), gap: space(4), justifyContent: "center" }}>
         <View style={{ width: "100%", maxWidth: 480, alignSelf: "center", gap: space(3) }}>
-          <SectionTitle>New PG</SectionTitle>
-          <Field label="PG name" value={name} onChangeText={setName} placeholder="e.g. Sunrise PG" />
+          <SectionTitle>New branch</SectionTitle>
+          <Muted style={{ fontSize: 12 }}>
+            {current} of {limit} branches used. Example names: D1, D2, D3, D4.
+          </Muted>
+          <Field label="Branch name" value={name} onChangeText={setName} placeholder="e.g. D1" />
           <Field label="City (optional)" value={city} onChangeText={setCity} placeholder="e.g. Pune" />
           <ErrorText>{err}</ErrorText>
           <Row style={{ gap: space(3) }}>
             <Button label="Cancel" variant="ghost" onPress={onClose} />
-            <Button label="Create PG" loading={busy} onPress={() => void submit()} />
+            <Button label="Create branch" loading={busy} onPress={() => void submit()} />
           </Row>
         </View>
       </View>

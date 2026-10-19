@@ -539,15 +539,15 @@ function TransferCard({ studentId, currentPgId }: { studentId: string; currentPg
 
   return (
     <Card style={{ gap: space(3) }}>
-      <Text style={{ fontWeight: "700", color: colors.text }}>Move to another PG</Text>
+      <Text style={{ fontWeight: "700", color: colors.text }}>Move to another branch</Text>
       <Muted>
-        Shift this student (and their login) to one of your other PGs. Their old invoices stay with
-        the previous PG.
+        Shift this student (and their login) to one of your other branches. Their old invoices stay
+        with the previous branch.
       </Muted>
       {open ? (
         <>
           <View style={{ gap: space(2) }}>
-            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>TARGET PG</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>TARGET BRANCH</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space(2) }}>
               {pgs.map((pg) => {
                 const sel = targetPg === pg.id;
@@ -648,7 +648,7 @@ function TransferCard({ studentId, currentPgId }: { studentId: string; currentPg
           </Row>
         </>
       ) : (
-        <Button label="Move to another PG" icon="swap-horizontal-outline" onPress={() => setOpen(true)} />
+        <Button label="Move to another branch" icon="swap-horizontal-outline" onPress={() => setOpen(true)} />
       )}
     </Card>
   );

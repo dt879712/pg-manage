@@ -22,6 +22,9 @@ tenantRouter.use(requireAuth, requireTenant);
 // with ownerUserId set; User.tenantId is the *active* PG carried in the JWT.
 // ---------------------------------------------------------------------------
 
+/** An owner may run at most this many PGs (branches). */
+export const MAX_PGS_PER_OWNER = 4;
+
 function slugify(name: string): string {
   return (
     name
@@ -49,6 +52,7 @@ tenantRouter.get("/pgs", requireRole("OWNER"), async (req, res, next) => {
       },
     });
     res.json({
+      limit: MAX_PGS_PER_OWNER,
       pgs: await Promise.all(
         pgs.map(async (pg) => ({
           ...pg,
@@ -73,6 +77,16 @@ tenantRouter.post("/pgs", requireRole("OWNER"), async (req, res, next) => {
         phone: z.string().optional(),
       })
       .parse(req.body);
+
+    const existing = await prisma.tenant.count({
+      where: { ownerUserId: req.user!.sub, status: { not: "CLOSED" } },
+    });
+    if (existing >= MAX_PGS_PER_OWNER) {
+      res.status(400).json({
+        error: `You can run a maximum of ${MAX_PGS_PER_OWNER} branches. Delete one first.`,
+      });
+      return;
+    }
 
     const baseSlug = slugify(body.name);
     let slug = baseSlug;

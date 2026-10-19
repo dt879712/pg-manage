@@ -254,7 +254,7 @@ function AdmissionDetail({
                   {pgs.length > 1 ? (
                     <View style={{ gap: space(2) }}>
                       <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
-                        ADMISSION INTO (PG)
+                        ADMISSION INTO (BRANCH)
                       </Text>
                       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space(2) }}>
                         {pgs.map((pg) => {
