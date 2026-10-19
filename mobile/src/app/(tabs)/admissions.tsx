@@ -6,6 +6,7 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  Switch,
   Text,
   TextInput,
   View,
@@ -136,6 +137,7 @@ function AdmissionDetail({
   const [roomId, setRoomId] = useState<string | null>(null);
   const [bedId, setBedId] = useState<string | null>(null);
   const [fee, setFee] = useState("");
+  const [paidNow, setPaidNow] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<null | "approve" | "reject">(null);
   const [err, setErr] = useState<string | null>(null);
@@ -153,6 +155,7 @@ function AdmissionDetail({
         roomId: roomId ?? undefined,
         bedId: bedId ?? undefined,
         monthlyFee: fee.trim() ? Math.max(0, parseInt(fee.replace(/\D/g, ""), 10) || 0) : undefined,
+        paidForCurrentMonth: paidNow,
       });
       onDone();
     } catch (e) {
@@ -297,6 +300,19 @@ function AdmissionDetail({
                       ]}
                     />
                     <Muted style={{ fontSize: 12 }}>Charged per student. Picking a room prefills its rent.</Muted>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: space(3) }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: colors.text, fontWeight: "600", fontSize: 13 }}>
+                          Paid for current month
+                        </Text>
+                        <Muted style={{ fontSize: 12 }}>{"Record this month's fee as received now."}</Muted>
+                      </View>
+                      <Switch
+                        value={paidNow}
+                        onValueChange={setPaidNow}
+                        disabled={fee.trim().length === 0}
+                      />
+                    </View>
                   </View>
                   <Muted style={{ fontSize: 12 }}>
                     Room only = allot whole room; pick a bed for shared rooms. Student gets notified on approval.

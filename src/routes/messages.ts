@@ -10,7 +10,7 @@ import { sendPushToUsers } from "../lib/push";
 export const messagesRouter = Router();
 messagesRouter.use(requireAuth, requireTenant);
 
-const senderRoles = ["STUDENT", "STAFF", "PARENT"] as const;
+const composerRoles = ["STAFF"] as const;
 const inboxViewerRoles = ["OWNER", "STAFF"] as const;
 
 /** Messages are retained for 48 hours, then removed automatically. */
@@ -46,7 +46,7 @@ const senderSelect = {
 /**
  * Student / parent / staff send a direct message to the PG owner.
  */
-messagesRouter.post("/", requireRole(...senderRoles), async (req, res, next) => {
+messagesRouter.post("/", requireRole(...composerRoles), async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId!;
     const body = z
@@ -80,9 +80,66 @@ messagesRouter.post("/", requireRole(...senderRoles), async (req, res, next) => 
 });
 
 /**
+ * Owner/Staff: reply to a message. The reply is delivered to whoever sent the
+ * original (or, when replying to your own outbound message, to its recipient).
+ */
+messagesRouter.post("/:id/reply", requireRole("OWNER", "STAFF"), async (req, res, next) => {
+  try {
+    const tenantId = req.user!.tenantId!;
+    const body = z
+      .object({ body: z.string().trim().min(1, "Reply cannot be empty").max(4000) })
+      .parse(req.body);
+
+    const original = await prisma.message.findFirst({
+      where: { id: req.params.id as string, tenantId, createdAt: { gte: messageCutoff() } },
+    });
+    if (!original) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    const recipientUserId =
+      original.senderUserId === req.user!.sub ? original.recipientUserId : original.senderUserId;
+    if (!recipientUserId) {
+      res.status(400).json({ error: "There is nobody to reply to" });
+      return;
+    }
+
+    const subject = original.subject
+      ? original.subject.startsWith("Re: ")
+        ? original.subject
+        : `Re: ${original.subject}`
+      : null;
+
+    const message = await prisma.message.create({
+      data: {
+        tenantId,
+        senderUserId: req.user!.sub,
+        recipientUserId,
+        replyToId: original.id,
+        subject,
+        body: body.body,
+      },
+      include: { sender: { select: { name: true, role: true } } },
+    });
+
+    res.status(201).json({ message });
+
+    const who = message.sender?.name ?? "The PG";
+    const preview = body.body.length > 120 ? `${body.body.slice(0, 117)}...` : body.body;
+    void notifyUser(tenantId, recipientUserId, `Reply from ${who}`, preview, {
+      type: "message",
+      messageId: message.id,
+    }).catch(() => {});
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * Owner: every message in the tenant.
  * Staff: messages sent by parents or students.
- * Student/Parent: only the messages they sent.
+ * Student/Parent: the messages they sent, plus any replies addressed to them.
  */
 messagesRouter.get("/", async (req, res, next) => {
   try {
@@ -104,7 +161,11 @@ messagesRouter.get("/", async (req, res, next) => {
         ],
       };
     } else {
-      where = { tenantId, ...fresh, senderUserId: req.user!.sub };
+      where = {
+        tenantId,
+        ...fresh,
+        OR: [{ senderUserId: req.user!.sub }, { recipientUserId: req.user!.sub }],
+      };
     }
 
     const canViewInbox = (inboxViewerRoles as readonly string[]).includes(role);
@@ -122,7 +183,7 @@ messagesRouter.get("/", async (req, res, next) => {
         take,
         skip,
         orderBy: { createdAt: "desc" },
-        include: { sender: { select: senderSelect } },
+        include: { sender: { select: senderSelect }, _count: { select: { replies: true } } },
       }),
     ]);
 
@@ -145,7 +206,7 @@ messagesRouter.get("/:id", async (req, res, next) => {
                 { senderUserId: req.user!.sub },
               ],
             }
-          : { senderUserId: req.user!.sub };
+          : { OR: [{ senderUserId: req.user!.sub }, { recipientUserId: req.user!.sub }] };
     const message = await prisma.message.findFirst({
       where: {
         id: req.params.id as string,
@@ -153,7 +214,7 @@ messagesRouter.get("/:id", async (req, res, next) => {
         createdAt: { gte: messageCutoff() },
         ...visibility,
       },
-      include: { sender: { select: senderSelect } },
+      include: { sender: { select: senderSelect }, _count: { select: { replies: true } } },
     });
     if (!message) {
       res.status(404).json({ error: "Not found" });
@@ -217,4 +278,27 @@ async function notifyInbox(
     recipients.map((r) => r.id),
     { title, body, data }
   ).catch(() => {});
+}
+
+async function notifyUser(
+  tenantId: string,
+  userId: string,
+  title: string,
+  body: string,
+  data: Record<string, unknown>
+): Promise<void> {
+  const user = await prisma.user.findFirst({
+    where: { id: userId, tenantId },
+    select: { role: true },
+  });
+  if (!user) return;
+  const audience =
+    user.role === "PARENT" ? "PARENTS" : user.role === "STUDENT" ? "STUDENTS" : "OWNERS";
+  await prisma.$transaction(async (tx) => {
+    const created = await tx.notification.create({
+      data: { tenantId, title, body, audience },
+    });
+    await tx.notificationRecipient.create({ data: { notificationId: created.id, userId } });
+  });
+  void sendPushToUsers([userId], { title, body, data }).catch(() => {});
 }

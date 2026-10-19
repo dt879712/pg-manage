@@ -35,6 +35,13 @@
       "expo-notifications",
       "expo-video",
       [
+        "expo-file-system",
+        {
+          "enableFileSharing": true,
+          "supportsOpeningDocumentsInPlace": true
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "Allow Dev Hostel to access your camera to record 15-second check-in/out videos.",

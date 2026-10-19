@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Button, Card, ErrorText, Loading, Muted } from "@/components/ui";
 import { Avatar } from "@/components/documents";
@@ -32,6 +32,7 @@ export default function NewStudent() {
   const [roomId, setRoomId] = useState<string | null>(null);
   const [bedId, setBedId] = useState<string | null>(null);
   const [fee, setFee] = useState("");
+  const [paidNow, setPaidNow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -55,6 +56,7 @@ export default function NewStudent() {
         monthlyFee: fee.trim()
           ? Math.max(0, parseInt(fee.replace(/\D/g, ""), 10) || 0)
           : undefined,
+        paidForCurrentMonth: paidNow,
         roomId: roomId ?? undefined,
         bedId: bedId ?? undefined,
       });
@@ -183,6 +185,17 @@ export default function NewStudent() {
           style={input}
         />
         <Muted>Charged per student, not per room. Picking a room prefills its default rent.</Muted>
+        <View style={styles.switchRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.text, fontWeight: "600" }}>Paid for current month</Text>
+            <Muted>{"Record this month's fee as received now."}</Muted>
+          </View>
+          <Switch
+            value={paidNow}
+            onValueChange={setPaidNow}
+            disabled={fee.trim().length === 0}
+          />
+        </View>
       </Card>
 
       <Card style={{ gap: space(3) }}>
@@ -291,6 +304,7 @@ const inputStyle = {
 
 const styles = StyleSheet.create({
   photoRow: { flexDirection: "row", alignItems: "center", gap: space(3) },
+  switchRow: { flexDirection: "row", alignItems: "center", gap: space(3) },
   docThumb: { width: 72, height: 72, borderRadius: radius.sm },
   docEmpty: { alignItems: "center", justifyContent: "center" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: space(2) },

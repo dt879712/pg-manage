@@ -1,7 +1,6 @@
-import { Platform } from "react-native";
-import { EncodingType, File, Paths } from "expo-file-system";
+import { Alert, Platform } from "react-native";
 import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
+import { saveBase64File } from "./download";
 
 export interface PdfDocItem {
   title: string;
@@ -248,31 +247,35 @@ export function profileFormHtml(r: ProfileFormInput): string {
   return document("Profile", head, body);
 }
 
+function printHtmlInFrame(html: string): void {
+  const frame = globalThis.document.createElement("iframe");
+  frame.style.position = "fixed";
+  frame.style.right = "0";
+  frame.style.bottom = "0";
+  frame.style.width = "0";
+  frame.style.height = "0";
+  frame.style.border = "0";
+  globalThis.document.body.appendChild(frame);
+  const doc = frame.contentWindow?.document;
+  if (!doc) return;
+  doc.open();
+  doc.write(html);
+  doc.close();
+  setTimeout(() => {
+    frame.contentWindow?.focus();
+    frame.contentWindow?.print();
+    setTimeout(() => frame.remove(), 60000);
+  }, 400);
+}
+
 export async function exportPdf(html: string, filename: string): Promise<void> {
   if (Platform.OS === "web") {
-    const w = window.open("", "_blank");
-    if (w) {
-      w.document.open();
-      w.document.write(html);
-      w.document.close();
-    }
+    printHtmlInFrame(html);
     return;
   }
 
-  const { uri, base64 } = await Print.printToFileAsync({ html, base64: true });
-  let pdfUri = uri;
-  if (base64) {
-    const target = new File(Paths.cache, filename);
-    if (target.exists) target.delete();
-    target.create();
-    target.write(base64, { encoding: EncodingType.Base64 });
-    pdfUri = target.uri;
-  }
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(pdfUri, {
-      mimeType: "application/pdf",
-      dialogTitle: "Save PDF",
-      UTI: "com.adobe.pdf",
-    });
-  }
+  const { base64 } = await Print.printToFileAsync({ html, base64: true });
+  if (!base64) throw new Error("Could not create the PDF");
+  await saveBase64File(base64, filename, "application/pdf");
+  Alert.alert("Downloaded", `${filename} saved to your device.`);
 }

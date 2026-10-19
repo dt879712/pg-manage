@@ -67,7 +67,7 @@ export default function Login() {
         setError(
           canReset
             ? "Incorrect password. You can reset it below."
-            : "Incorrect email or password. Only the owner can reset a password — please contact your owner.",
+            : "Incorrect email/mobile or password. Only the owner can reset a password — please contact your owner.",
         );
       } else {
         setError(e instanceof Error ? e.message : "Login failed");
@@ -114,15 +114,14 @@ export default function Login() {
     >
       <Card style={{ gap: space(3), ...shadow.md, maxWidth: isWide ? 400 : undefined, width: isWide ? "100%" : undefined }}>
         <View style={{ gap: 6 }}>
-          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>Email</Text>
+          <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>Email or mobile number</Text>
           <TextInput
             value={email}
             onChangeText={setEmail}
             onFocus={focusForm}
             autoCapitalize="none"
-            keyboardType="email-address"
             style={[inputStyle, { borderColor: colors.border, color: colors.text, backgroundColor: colors.bg }]}
-            placeholder="you@example.com"
+            placeholder="you@example.com or 98765 43210"
             placeholderTextColor={colors.muted}
           />
         </View>

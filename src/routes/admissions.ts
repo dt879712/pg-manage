@@ -7,6 +7,7 @@ import { requireTenant } from "../middleware/tenant";
 import { sendPushToUsers } from "../lib/push";
 import { mailConfigured, sendMail } from "../lib/mail";
 import { storeMedia, resolveMediaUrl } from "../lib/fileStore";
+import { ensureGuardianParent } from "../lib/guardian";
 
 export const admissionsRouter = Router();
 
@@ -261,6 +262,7 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
         roomId: z.string().optional(),
         bedId: z.string().optional(),
         monthlyFee: z.number().int().nonnegative().optional(),
+        paidForCurrentMonth: z.boolean().optional(),
       })
       .parse(req.body ?? {});
 
@@ -352,6 +354,34 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
           meta: { studentId: created.id, roomId, bedId },
         },
       });
+      await ensureGuardianParent(tx, tenantId, created, request.passwordHash);
+      const amount = body.monthlyFee ?? 0;
+      if (body.paidForCurrentMonth && amount > 0) {
+        const now = new Date();
+        const invoice = await tx.invoice.create({
+          data: {
+            tenantId,
+            studentId: created.id,
+            title: `Monthly fee — ${now.toLocaleString("en-IN", { month: "long" })} ${now.getFullYear()}`,
+            amount,
+            periodMonth: now.getMonth() + 1,
+            periodYear: now.getFullYear(),
+            status: "PAID",
+            dueDate: now,
+          },
+        });
+        await tx.payment.create({
+          data: {
+            tenantId,
+            studentId: created.id,
+            invoiceId: invoice.id,
+            amount,
+            method: "CASH",
+            note: "Paid on admission",
+            recordedById: req.user!.sub,
+          },
+        });
+      }
       return created;
     });
 

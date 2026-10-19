@@ -64,7 +64,7 @@ export function StudentHome({ name }: { name: string }) {
           <Button label="My videos" icon="videocam-outline" variant="ghost" onPress={() => router.push("/status-videos")} />
         </View>
         <View style={{ flex: 1 }}>
-          <Button label="Message owner" icon="chatbubble-outline" variant="ghost" onPress={() => router.push("/message/new")} />
+          <Button label="Messages" icon="chatbubbles-outline" variant="ghost" onPress={() => router.push("/messages")} />
         </View>
         <View style={{ flex: 1 }}>
           <Button label="Rules" icon="book-outline" variant="ghost" onPress={() => router.push("/rules")} />

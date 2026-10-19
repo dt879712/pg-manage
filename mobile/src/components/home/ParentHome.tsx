@@ -80,10 +80,7 @@ export function ParentHome({ name }: { name: string }) {
       <LatestVideoCard />
       <Row style={{ gap: space(3) }}>
         <View style={{ flex: 1 }}>
-          <Button label="Message owner" variant="ghost" icon="chatbubble-outline" onPress={() => router.push("/message/new")} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Button label="My messages" variant="ghost" icon="chatbubbles-outline" onPress={() => router.push("/messages")} />
+          <Button label="Messages" variant="ghost" icon="chatbubbles-outline" onPress={() => router.push("/messages")} />
         </View>
         <View style={{ flex: 1 }}>
           <Button label="Rules" variant="ghost" icon="book-outline" onPress={() => router.push("/rules")} />

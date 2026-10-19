@@ -103,6 +103,7 @@ export interface CreateStudentInput {
   guardianPhone?: string;
   guardianEmail?: string;
   monthlyFee?: number;
+  paidForCurrentMonth?: boolean;
   photoUrl?: string;
   roomId?: string;
   bedId?: string;
@@ -210,7 +211,7 @@ export function getAdmission(id: string) {
 
 export function approveAdmission(
   id: string,
-  body: { roomId?: string; bedId?: string; monthlyFee?: number }
+  body: { roomId?: string; bedId?: string; monthlyFee?: number; paidForCurrentMonth?: boolean }
 ) {
   return api<{ ok: boolean; studentId: string }>(`/admissions/${id}/approve`, {
     method: "POST",
@@ -281,6 +282,10 @@ export function getMessage(id: string) {
 
 export function markMessageRead(id: string) {
   return api<{ message: Message }>(`/messages/${id}/read`, { method: "POST", body: {} });
+}
+
+export function replyMessage(id: string, body: string) {
+  return api<{ message: Message }>(`/messages/${id}/reply`, { method: "POST", body: { body } });
 }
 
 export type StatusDirection = "CHECK_IN" | "CHECK_OUT";

@@ -216,6 +216,7 @@ model User {
   leaveRequests        LeaveRequest[]      @relation("LeaveApplicant")
   reviewedLeaves       LeaveRequest[]      @relation("LeaveReviewer")
   sentMessages         Message[]           @relation("MessageSender")
+  receivedMessages     Message[]           @relation("MessageRecipient")
   recordedStatusVideos StudentStatusVideo[] @relation("StatusVideoRecorder")
 
   @@index([tenantId])
@@ -574,18 +575,24 @@ model LeaveRequest {
 // ---------------------------------------------------------------------------
 
 model Message {
-  id           String   @id @default(cuid())
-  tenantId     String
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  senderUserId String
-  sender       User     @relation("MessageSender", fields: [senderUserId], references: [id], onDelete: Cascade)
-  subject      String?
-  body         String
-  readAt       DateTime?
-  createdAt    DateTime @default(now())
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  senderUserId    String
+  sender          User     @relation("MessageSender", fields: [senderUserId], references: [id], onDelete: Cascade)
+  recipientUserId String?
+  recipient       User?    @relation("MessageRecipient", fields: [recipientUserId], references: [id], onDelete: SetNull)
+  replyToId       String?
+  replyTo         Message? @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies         Message[] @relation("MessageReply")
+  subject         String?
+  body            String
+  readAt          DateTime?
+  createdAt       DateTime @default(now())
 
   @@index([tenantId])
   @@index([senderUserId])
+  @@index([recipientUserId])
   @@index([createdAt])
   @@map("messages")
 }

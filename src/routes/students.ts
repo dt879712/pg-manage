@@ -30,6 +30,11 @@ const studentBody = z.object({
   joinDate: z.coerce.date().optional(),
 });
 
+const studentCreateBody = studentBody.extend({
+  paidForCurrentMonth: z.boolean().optional(),
+  paidAmount: z.number().int().positive().optional(),
+});
+
 async function resolvePlacement(
   tenantId: string,
   roomId: string | undefined,
@@ -93,7 +98,7 @@ studentsRouter.get("/", async (req, res, next) => {
 studentsRouter.post("/", async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId!;
-    const body = studentBody.parse(req.body);
+    const body = studentCreateBody.parse(req.body);
     const placement = await resolvePlacement(tenantId, body.roomId, body.bedId);
     if ("error" in placement) {
       res.status(400).json({ error: placement.error });
@@ -129,6 +134,33 @@ studentsRouter.post("/", async (req, res, next) => {
       });
       if (placement.bedId) {
         await tx.bed.update({ where: { id: placement.bedId }, data: { status: "OCCUPIED" } });
+      }
+      const amount = body.paidAmount ?? body.monthlyFee ?? 0;
+      if (body.paidForCurrentMonth && amount > 0) {
+        const now = new Date();
+        const invoice = await tx.invoice.create({
+          data: {
+            tenantId,
+            studentId: created.id,
+            title: `Monthly fee — ${now.toLocaleString("en-IN", { month: "long" })} ${now.getFullYear()}`,
+            amount,
+            periodMonth: now.getMonth() + 1,
+            periodYear: now.getFullYear(),
+            status: "PAID",
+            dueDate: now,
+          },
+        });
+        await tx.payment.create({
+          data: {
+            tenantId,
+            studentId: created.id,
+            invoiceId: invoice.id,
+            amount,
+            method: "CASH",
+            note: "Paid on admission",
+            recordedById: req.user!.sub,
+          },
+        });
       }
       return created;
     });

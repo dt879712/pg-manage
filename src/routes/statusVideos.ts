@@ -16,7 +16,7 @@ import {
 export const statusVideosRouter = Router();
 statusVideosRouter.use(requireAuth, requireTenant);
 
-const recorderRoles = ["OWNER", "STAFF", "GUARD"] as const;
+const recorderRoles = ["GUARD"] as const;
 const viewerRoles = ["OWNER", "STAFF", "GUARD", "STUDENT", "PARENT"] as const;
 const directionEnum = z.enum(["CHECK_IN", "CHECK_OUT"]);
 

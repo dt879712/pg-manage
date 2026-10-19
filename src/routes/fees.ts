@@ -238,16 +238,18 @@ paymentsRouter.post("/", requireRole("OWNER"), async (req, res, next) => {
       return { payment: created, invoiceStatus: status, totalPaid: paid };
     });
 
-    // Receipt line shared by the parent and student notifications.
+    // Receipt line shared by the parent and student notifications. Full payments
+    // and partial payments get wording that matches the remaining balance.
     const studentName = [student.firstName, student.lastName].filter(Boolean).join(" ");
     const method = body.method ?? "CASH";
     const remaining = invoice ? Math.max(invoice.amount - totalPaid, 0) : 0;
+    const amountText = body.amount.toLocaleString("en-IN");
     const receiptLine =
-      `Payment of ₹${body.amount.toLocaleString("en-IN")} received for ${studentName}` +
-      `${invoice ? ` — ${invoice.title}` : ""} via ${method}.` +
+      `Fees paid for ${studentName}${invoice ? ` — ${invoice.title}` : ""}: ₹${amountText} received via ${method}. ` +
       (remaining > 0
-        ? ` ₹${remaining.toLocaleString("en-IN")} still due.`
-        : " Thank you!");
+        ? `₹${remaining.toLocaleString("en-IN")} is still due — you can download the slip from the Fees screen.`
+        : "No dues remaining — you can download the slip from the Fees screen.");
+    const receiptTitle = remaining > 0 ? "Fees partially paid" : "Fees paid in full";
 
     const notify = async (userIds: string[], audience: "PARENTS" | "STUDENTS") => {
       if (!userIds.length) return 0;
@@ -255,7 +257,7 @@ paymentsRouter.post("/", requireRole("OWNER"), async (req, res, next) => {
         const created = await tx.notification.create({
           data: {
             tenantId,
-            title: "Payment received",
+            title: receiptTitle,
             body: receiptLine,
             audience,
             createdById: req.user!.sub,

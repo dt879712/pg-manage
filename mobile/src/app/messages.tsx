@@ -6,6 +6,7 @@ import {
   RefreshControl,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -23,9 +24,9 @@ import {
 import { DesktopShell } from "@/components/shell";
 import { TopBar } from "@/components/topbar";
 import { useAuth } from "@/lib/auth";
-import { markMessageRead } from "@/lib/endpoints";
+import { markMessageRead, replyMessage } from "@/lib/endpoints";
 import { expiresIn, shortDate, timeAgo, timeOf } from "@/lib/format";
-import { space } from "@/lib/theme";
+import { radius, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import type { Message } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
@@ -55,7 +56,7 @@ function MessagesView() {
   const { user } = useAuth();
   const role = user?.role;
   const isInbox = role === "OWNER" || role === "STAFF";
-  const canSend = role === "STAFF" || role === "STUDENT" || role === "PARENT";
+  const canSend = role === "STAFF";
   const { data, loading, error, reload } = useApi<{
     messages: Message[];
     total: number;
@@ -149,7 +150,7 @@ function MessagesView() {
                     {item.subject?.trim() ? item.subject : item.body}
                   </Text>
                   <Muted numberOfLines={1} style={{ fontSize: 12 }}>
-                    {isInbox ? senderContext(item) : "To owner"}
+                    {isInbox ? senderContext(item) : item.replyToId ? "From the PG" : "To owner"}
                     {" \u00b7 "}
                     {timeAgo(item.createdAt)}
                   </Muted>
@@ -158,8 +159,8 @@ function MessagesView() {
                   <Badge label="New" tone="primary" />
                 ) : !isInbox ? (
                   <Badge
-                    label={item.readAt ? "Read" : "Unread"}
-                    tone={item.readAt ? "success" : "neutral"}
+                    label={item._count?.replies ? "Replied" : "No reply"}
+                    tone={item._count?.replies ? "success" : "neutral"}
                   />
                 ) : null}
               </Pressable>
@@ -194,6 +195,9 @@ function MessageDetail({
   const { colors } = useTheme();
   const { data, loading, error } = useApi<{ message: Message }>(`/messages/${id}`);
   const message = data?.message;
+  const [reply, setReply] = useState("");
+  const [sending, setSending] = useState(false);
+  const [replyErr, setReplyErr] = useState<string | null>(null);
 
   const markRead = async () => {
     try {
@@ -201,6 +205,30 @@ function MessageDetail({
       onChanged();
     } catch {
       /* ignore */
+    }
+  };
+
+  const sendReply = async () => {
+    const text = reply.trim();
+    if (!text) return;
+    setSending(true);
+    setReplyErr(null);
+    try {
+      await replyMessage(id, text);
+      if (!message?.readAt) {
+        try {
+          await markMessageRead(id);
+        } catch {
+          /* ignore */
+        }
+      }
+      setReply("");
+      onChanged();
+      onClose();
+    } catch (e) {
+      setReplyErr(e instanceof Error ? e.message : "Failed to send reply");
+    } finally {
+      setSending(false);
     }
   };
 
@@ -240,8 +268,8 @@ function MessageDetail({
                     )
                   ) : (
                     <Badge
-                      label={message.readAt ? "Read" : "Unread"}
-                      tone={message.readAt ? "success" : "neutral"}
+                      label={message._count?.replies ? "Replied" : "No reply"}
+                      tone={message._count?.replies ? "success" : "neutral"}
                     />
                   )}
                 </Row>
@@ -288,6 +316,39 @@ function MessageDetail({
                   {message.body}
                 </Text>
               </Card>
+
+              {isInbox ? (
+                <Card style={{ gap: space(3) }}>
+                  <Text style={{ fontWeight: "700", color: colors.text }}>Reply</Text>
+                  <TextInput
+                    value={reply}
+                    onChangeText={setReply}
+                    placeholder={`Write a reply to ${senderName(message)}`}
+                    placeholderTextColor={colors.muted}
+                    multiline
+                    style={{
+                      minHeight: 90,
+                      textAlignVertical: "top",
+                      borderWidth: 1,
+                      borderRadius: radius.sm,
+                      borderColor: colors.border,
+                      backgroundColor: colors.bg,
+                      color: colors.text,
+                      paddingHorizontal: space(3),
+                      paddingVertical: space(3),
+                      fontSize: 15,
+                    }}
+                  />
+                  <ErrorText>{replyErr}</ErrorText>
+                  <Button
+                    label="Send reply"
+                    icon="send"
+                    loading={sending}
+                    disabled={reply.trim().length === 0}
+                    onPress={sendReply}
+                  />
+                </Card>
+              ) : null}
 
               <Row style={{ gap: space(3) }}>
                 {isInbox && !message.readAt ? (

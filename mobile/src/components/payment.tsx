@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
-import { EncodingType, File, Paths } from "expo-file-system";
-import * as Sharing from "expo-sharing";
+import { File, Paths } from "expo-file-system";
+import * as LegacyFileSystem from "expo-file-system/legacy";
+import { saveBase64File } from "@/lib/download";
 import type { ComponentProps } from "react";
 import { useState } from "react";
 import { Alert, Image, Linking, Pressable, Text, View } from "react-native";
@@ -49,29 +50,24 @@ export function PaymentInfo({ tenant }: { tenant?: TenantBranding | null }) {
     setSharingQr(true);
     setErr(null);
     try {
-      const dataUrl = t.upiQrUrl.startsWith("data:")
-        ? t.upiQrUrl
-        : null;
-      let target: File;
+      const dataUrl = t.upiQrUrl.startsWith("data:") ? t.upiQrUrl : null;
+      let base64 = "";
       let mime = "image/png";
       if (dataUrl) {
         const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
         mime = match?.[1] ?? "image/png";
-        const ext = mime === "image/jpeg" || mime === "image/jpg" ? "jpg" : "png";
-        const f = new File(Paths.cache, `upi-qr.${ext}`);
-        if (f.exists) f.delete();
-        f.create();
-        f.write(match?.[2] ?? "", { encoding: EncodingType.Base64 });
-        target = f;
+        base64 = match?.[2] ?? "";
       } else {
-        target = await File.downloadFileAsync(t.upiQrUrl, new File(Paths.cache, "upi-qr.png"));
+        const cached = await File.downloadFileAsync(t.upiQrUrl, new File(Paths.cache, "upi-qr.png"));
+        base64 = await LegacyFileSystem.readAsStringAsync(cached.uri, {
+          encoding: LegacyFileSystem.EncodingType.Base64,
+        });
       }
-      await Sharing.shareAsync(target.uri, {
-        mimeType: mime,
-        dialogTitle: "Share UPI QR",
-      });
+      const ext = mime === "image/jpeg" || mime === "image/jpg" ? "jpg" : "png";
+      await saveBase64File(base64, `upi-qr.${ext}`, mime);
+      Alert.alert("Downloaded", "UPI QR code saved.");
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not share the QR code");
+      setErr(e instanceof Error ? e.message : "Could not save the QR code");
     } finally {
       setSharingQr(false);
     }

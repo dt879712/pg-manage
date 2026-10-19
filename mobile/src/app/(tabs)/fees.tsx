@@ -1,6 +1,5 @@
-import { EncodingType, File, Paths } from "expo-file-system";
 import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
+import { saveBase64File } from "@/lib/download";
 import { WebView } from "react-native-webview";
 import { useState } from "react";
 import { Alert, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
@@ -29,7 +28,7 @@ function FeesView() {
   useRefreshOnFocus(reload);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ html: string; pdfUri: string | null; title: string } | null>(null);
+  const [preview, setPreview] = useState<{ html: string; pdfBase64: string | null; title: string } | null>(null);
   const [tab, setTab] = useState<Tab | null>("DUE");
   const [editInv, setEditInv] = useState<Invoice | null>(null);
   const [amtText, setAmtText] = useState("");
@@ -179,24 +178,16 @@ function FeesView() {
 
   const showSlip = async (inv: Invoice, payment: Payment) => {
     const html = receiptHtml(receiptFor(inv, payment));
-    let pdfUri: string | null = null;
+    let pdfBase64: string | null = null;
     if (Platform.OS !== "web") {
       try {
-        const { uri, base64 } = await Print.printToFileAsync({ html, base64: true });
-        if (base64) {
-          const target = new File(Paths.cache, "fee-receipt.pdf");
-          if (target.exists) target.delete();
-          target.create();
-          target.write(base64, { encoding: EncodingType.Base64 });
-          pdfUri = target.uri;
-        } else {
-          pdfUri = uri;
-        }
+        const { base64 } = await Print.printToFileAsync({ html, base64: true });
+        pdfBase64 = base64 ?? null;
       } catch {
         // Preview still opens even if PDF generation failed.
       }
     }
-    setPreview({ html, pdfUri, title: inv.title });
+    setPreview({ html, pdfBase64, title: inv.title });
   };
 
   const download = async (inv: Invoice) => {
@@ -224,15 +215,7 @@ function FeesView() {
       }
       return;
     }
-    if (!(await Sharing.isAvailableAsync())) {
-      setErr("Saving PDF is not available on this device.");
-      return;
-    }
-    await Sharing.shareAsync(pdfUri, {
-      mimeType: "application/pdf",
-      dialogTitle: "Save fee receipt",
-      UTI: "com.adobe.pdf",
-    });
+    await saveBase64File(pdfUri, "fee-receipt.pdf", "application/pdf");
   };
 
   return (
@@ -462,8 +445,8 @@ function FeesView() {
                 }
               }}
             />
-            {preview.pdfUri ? (
-              <Button label="Save PDF" onPress={() => savePdf(preview.pdfUri!)} />
+            {preview.pdfBase64 ? (
+              <Button label="Save PDF" onPress={() => savePdf(preview.pdfBase64!)} />
             ) : (
               <Button
                 label="Print"

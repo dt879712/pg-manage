@@ -317,7 +317,10 @@ export interface Message {
   body: string;
   readAt?: string | null;
   createdAt: string;
+  recipientUserId?: string | null;
+  replyToId?: string | null;
   sender?: MessageSender | null;
+  _count?: { replies: number };
 }
 
 export interface MessageListResult {

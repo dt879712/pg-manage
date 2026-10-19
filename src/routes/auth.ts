@@ -88,10 +88,18 @@ authRouter.post("/register-owner", async (req, res, next) => {
 authRouter.post("/login", async (req, res, next) => {
   try {
     const body = z
-      .object({ email: z.string().email(), password: z.string().min(1) })
+      .object({ email: z.string().min(1), password: z.string().min(1) })
       .parse(req.body);
 
-    const user = await prisma.user.findUnique({ where: { email: body.email } });
+    // Students/staff/owners sign in with their email; parents can use the
+    // guardian mobile number instead (they share the student's password).
+    const identifier = body.email.trim();
+    const user = identifier.includes("@")
+      ? await prisma.user.findUnique({ where: { email: identifier.toLowerCase() } })
+      : await prisma.user.findFirst({
+          where: { phone: identifier, role: "PARENT" },
+          orderBy: { createdAt: "asc" },
+        });
     if (!user) {
       // Only owners can self-reset; everyone else is told to contact their owner.
       res.status(401).json({ error: "Invalid credentials", canReset: false });

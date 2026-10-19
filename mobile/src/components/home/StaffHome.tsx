@@ -35,7 +35,7 @@ export function StaffHome({ name }: { name: string }) {
         <Hero
           eyebrow={greeting()}
           title={name}
-          subtitle={isGuard ? "Gate · Record student in/out" : "Front desk · Record check-in/out videos"}
+          subtitle={isGuard ? "Gate · Record student in/out" : "Front desk"}
         />
       </View>
 
@@ -97,22 +97,24 @@ export function StaffHome({ name }: { name: string }) {
                   </Text>
                 </Row>
               </View>
-              <Row style={{ gap: space(2) }}>
-                <Button
-                  label="In"
-                  icon="videocam-outline"
-                  variant={isIn ? "ghost" : "success"}
-                  disabled={isIn}
-                  onPress={() => record(s, "CHECK_IN")}
-                />
-                <Button
-                  label="Out"
-                  icon="videocam-outline"
-                  variant={isIn ? "success" : "ghost"}
-                  disabled={!isIn}
-                  onPress={() => record(s, "CHECK_OUT")}
-                />
-              </Row>
+              {isGuard ? (
+                <Row style={{ gap: space(2) }}>
+                  <Button
+                    label="In"
+                    icon="videocam-outline"
+                    variant={isIn ? "ghost" : "success"}
+                    disabled={isIn}
+                    onPress={() => record(s, "CHECK_IN")}
+                  />
+                  <Button
+                    label="Out"
+                    icon="videocam-outline"
+                    variant={isIn ? "success" : "ghost"}
+                    disabled={!isIn}
+                    onPress={() => record(s, "CHECK_OUT")}
+                  />
+                </Row>
+              ) : null}
             </Row>
           );
         })}
