@@ -1,5 +1,4 @@
 import * as Print from "expo-print";
-import { saveBase64File } from "@/lib/download";
 import { WebView } from "react-native-webview";
 import { useState } from "react";
 import { Alert, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
@@ -9,6 +8,7 @@ import { TopBar } from "@/components/topbar";
 import { PaymentInfo } from "@/components/payment";
 import { useAuth } from "@/lib/auth";
 import { createPayment } from "@/lib/endpoints";
+import { exportPdf } from "@/lib/formPdf";
 import { fullName, money, shortDate } from "@/lib/format";
 import { receiptHtml, type ReceiptInput } from "@/lib/receipt";
 import { radius, space } from "@/lib/theme";
@@ -28,7 +28,8 @@ function FeesView() {
   useRefreshOnFocus(reload);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ html: string; pdfBase64: string | null; title: string } | null>(null);
+  const [preview, setPreview] = useState<{ html: string; title: string } | null>(null);
+  const [savingPdf, setSavingPdf] = useState(false);
   const [tab, setTab] = useState<Tab | null>("DUE");
   const [editInv, setEditInv] = useState<Invoice | null>(null);
   const [amtText, setAmtText] = useState("");
@@ -178,16 +179,7 @@ function FeesView() {
 
   const showSlip = async (inv: Invoice, payment: Payment) => {
     const html = receiptHtml(receiptFor(inv, payment));
-    let pdfBase64: string | null = null;
-    if (Platform.OS !== "web") {
-      try {
-        const { base64 } = await Print.printToFileAsync({ html, base64: true });
-        pdfBase64 = base64 ?? null;
-      } catch {
-        // Preview still opens even if PDF generation failed.
-      }
-    }
-    setPreview({ html, pdfBase64, title: inv.title });
+    setPreview({ html, title: inv.title });
   };
 
   const download = async (inv: Invoice) => {
@@ -204,18 +196,13 @@ function FeesView() {
     }
   };
 
-  const savePdf = async (pdfUri: string) => {
+  const savePdf = async (html: string) => {
     setErr(null);
-    if (Platform.OS === "web") {
-      const w = window.open("", "_blank");
-      if (w) {
-        w.document.open();
-        w.document.write(pdfUri.startsWith("data:") ? atob(pdfUri.split(",")[1]) : pdfUri);
-        w.document.close();
-      }
-      return;
+    try {
+      await exportPdf(html, "fee-receipt.pdf");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to save the PDF");
     }
-    await saveBase64File(pdfUri, "fee-receipt.pdf", "application/pdf");
   };
 
   return (
@@ -426,7 +413,7 @@ function FeesView() {
               <Muted>{preview.title}</Muted>
             </View>
             <Button
-              label={Platform.OS === "web" ? "New tab" : "Print"}
+              label={Platform.OS === "web" ? "Open in tab" : "Print"}
               variant="ghost"
               onPress={async () => {
                 if (Platform.OS === "web") {
@@ -445,23 +432,18 @@ function FeesView() {
                 }
               }}
             />
-            {preview.pdfBase64 ? (
-              <Button label="Save PDF" onPress={() => savePdf(preview.pdfBase64!)} />
-            ) : (
-              <Button
-                label="Print"
-                onPress={() => {
-                  if (Platform.OS === "web") {
-                    const w = window.open("", "_blank");
-                    if (w) {
-                      w.document.open();
-                      w.document.write(preview.html);
-                      w.document.close();
-                    }
-                  }
-                }}
-              />
-            )}
+            <Button
+              label="Save PDF"
+              loading={savingPdf}
+              onPress={async () => {
+                setSavingPdf(true);
+                try {
+                  await savePdf(preview.html);
+                } finally {
+                  setSavingPdf(false);
+                }
+              }}
+            />
             <Pressable onPress={() => setPreview(null)} style={{ padding: space(2) }}>
               <Text style={{ color: colors.muted, fontSize: 14 }}>Close</Text>
             </Pressable>
@@ -469,7 +451,9 @@ function FeesView() {
           {Platform.OS === "web" ? (
             <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: space(3), padding: space(4) }}>
               <Text style={{ color: colors.text, fontWeight: "700", fontSize: 16 }}>Receipt ready</Text>
-              <Muted>Use the buttons above to open it in a new tab or print.</Muted>
+              <Muted>
+                Tap “Save PDF” to download it to your computer, or open it in a new tab to print.
+              </Muted>
             </View>
           ) : (
             <WebView

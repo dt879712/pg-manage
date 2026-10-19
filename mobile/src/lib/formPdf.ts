@@ -266,13 +266,28 @@ async function exportPdfOnWeb(html: string, filename: string): Promise<void> {
     .save();
 }
 
+/**
+ * One entry point for "download this HTML as a PDF":
+ * - Web: browser saves the file straight to the Downloads folder.
+ * - Mobile: native share sheet opens (Save to Files / Downloads / Drive…).
+ */
 export async function exportPdf(html: string, filename: string): Promise<void> {
   if (Platform.OS === "web") {
     await exportPdfOnWeb(html, filename);
     return;
   }
 
-  const { base64 } = await Print.printToFileAsync({ html, base64: true });
+  const { uri, base64 } = await Print.printToFileAsync({ html, base64: true });
+  const Sharing = await import("expo-sharing");
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(uri, {
+      mimeType: "application/pdf",
+      dialogTitle: filename,
+      UTI: "com.adobe.pdf",
+    });
+    return;
+  }
+
   if (!base64) throw new Error("Could not create the PDF");
   await saveBase64File(base64, filename, "application/pdf");
 }
