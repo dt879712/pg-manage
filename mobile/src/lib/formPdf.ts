@@ -1,4 +1,4 @@
-import { Alert, Platform } from "react-native";
+import { Platform } from "react-native";
 import * as Print from "expo-print";
 import { saveBase64File } from "./download";
 
@@ -247,35 +247,25 @@ export function profileFormHtml(r: ProfileFormInput): string {
   return document("Profile", head, body);
 }
 
-function printHtmlInFrame(html: string): void {
-  const frame = globalThis.document.createElement("iframe");
-  frame.style.position = "fixed";
-  frame.style.right = "0";
-  frame.style.bottom = "0";
-  frame.style.width = "0";
-  frame.style.height = "0";
-  frame.style.border = "0";
-  globalThis.document.body.appendChild(frame);
-  const doc = frame.contentWindow?.document;
-  if (!doc) return;
-  doc.open();
-  doc.write(html);
-  doc.close();
-  setTimeout(() => {
-    frame.contentWindow?.focus();
-    frame.contentWindow?.print();
-    setTimeout(() => frame.remove(), 60000);
-  }, 400);
+function downloadPdfOnWeb(base64: string, filename: string): void {
+  const link = globalThis.document.createElement("a");
+  link.href = `data:application/pdf;base64,${base64}`;
+  link.download = filename;
+  link.style.display = "none";
+  globalThis.document.body.appendChild(link);
+  link.click();
+  setTimeout(() => link.remove(), 0);
 }
 
 export async function exportPdf(html: string, filename: string): Promise<void> {
   if (Platform.OS === "web") {
-    printHtmlInFrame(html);
+    const { base64 } = await Print.printToFileAsync({ html, base64: true });
+    if (!base64) throw new Error("Could not create the PDF");
+    downloadPdfOnWeb(base64, filename);
     return;
   }
 
   const { base64 } = await Print.printToFileAsync({ html, base64: true });
   if (!base64) throw new Error("Could not create the PDF");
   await saveBase64File(base64, filename, "application/pdf");
-  Alert.alert("Downloaded", `${filename} saved to your device.`);
 }
