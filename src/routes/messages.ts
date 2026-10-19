@@ -262,7 +262,11 @@ async function notifyInbox(
   data: Record<string, unknown>
 ): Promise<void> {
   const recipients = await prisma.user.findMany({
-    where: { tenantId, role: { in: ["OWNER", "STAFF"] }, isActive: true },
+    where: {
+      role: { in: ["OWNER", "STAFF"] },
+      isActive: true,
+      OR: [{ tenantId }, { ownedTenants: { some: { id: tenantId } } }],
+    },
     select: { id: true },
   });
   if (!recipients.length) return;

@@ -2,15 +2,19 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { TopBar } from "@/components/topbar";
-import { AuthProvider } from "@/lib/auth";
+import { AuthProvider, useAuth } from "@/lib/auth";
 import { ThemeProvider, useTheme } from "@/lib/theme-context";
 
 function AppStack() {
   const { isDark, colors } = useTheme();
+  const { sessionKey } = useAuth();
   return (
     <>
       <StatusBar style={isDark ? "light" : "dark"} />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+      <Stack
+        key={sessionKey}
+        screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}
+      >
         <Stack.Screen name="index" />
         <Stack.Screen name="login" />
         <Stack.Screen name="forgot-password" />

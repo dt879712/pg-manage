@@ -209,16 +209,28 @@ admissionsRouter.post("/status", async (req, res, next) => {
 });
 
 // --- Owner review ---
+// Owners may run multiple PGs: the list spans every PG they own, and an
+// application can be approved into any of them (targetPgId).
+
+async function ownedTenantIds(ownerId: string): Promise<string[]> {
+  const pgs = await prisma.tenant.findMany({
+    where: { ownerUserId: ownerId },
+    select: { id: true },
+  });
+  return pgs.map((p) => p.id);
+}
 
 admissionsRouter.get("/", ...ownerGuard, async (req, res, next) => {
   try {
     const status = z.enum(["PENDING", "APPROVED", "REJECTED"]).optional().parse(req.query.status);
+    const tenantIds = await ownedTenantIds(req.user!.sub);
     const admissions = await prisma.admissionRequest.findMany({
-      where: { tenantId: req.user!.tenantId!, ...(status ? { status } : {}) },
+      where: { tenantId: { in: tenantIds }, ...(status ? { status } : {}) },
       orderBy: { createdAt: "desc" },
       include: {
         room: { select: { roomNumber: true } },
         bed: { select: { label: true } },
+        tenant: { select: { id: true, name: true } },
       },
     });
     res.json({ admissions });
@@ -229,11 +241,13 @@ admissionsRouter.get("/", ...ownerGuard, async (req, res, next) => {
 
 admissionsRouter.get("/:id", ...ownerGuard, async (req, res, next) => {
   try {
+    const tenantIds = await ownedTenantIds(req.user!.sub);
     const admission = await prisma.admissionRequest.findFirst({
-      where: { id: req.params.id as string, tenantId: req.user!.tenantId! },
+      where: { id: req.params.id as string, tenantId: { in: tenantIds } },
       include: {
         room: { select: { roomNumber: true } },
         bed: { select: { label: true } },
+        tenant: { select: { id: true, name: true } },
         documents: { orderBy: { createdAt: "asc" } },
       },
     });
@@ -256,9 +270,11 @@ admissionsRouter.get("/:id", ...ownerGuard, async (req, res, next) => {
 
 admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
   try {
-    const tenantId = req.user!.tenantId!;
     const body = z
       .object({
+        // Target PG to admit the student into. Defaults to the PG the
+        // application was submitted to.
+        tenantId: z.string().optional(),
         roomId: z.string().optional(),
         bedId: z.string().optional(),
         monthlyFee: z.number().int().nonnegative().optional(),
@@ -266,8 +282,9 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
       })
       .parse(req.body ?? {});
 
+    const tenantIds = await ownedTenantIds(req.user!.sub);
     const request = await prisma.admissionRequest.findFirst({
-      where: { id: req.params.id as string, tenantId },
+      where: { id: req.params.id as string, tenantId: { in: tenantIds } },
     });
     if (!request) {
       res.status(404).json({ error: "Not found" });
@@ -275,6 +292,13 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
     }
     if (request.status !== "PENDING") {
       res.status(400).json({ error: "This application has already been reviewed" });
+      return;
+    }
+
+    // Decide which PG the student is allotted to.
+    const tenantId = body.tenantId ?? request.tenantId;
+    if (!tenantIds.includes(tenantId)) {
+      res.status(403).json({ error: "You cannot admit a student into that PG" });
       return;
     }
 
@@ -338,13 +362,14 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
       if (request.userId) {
         await tx.user.update({
           where: { id: request.userId },
-          data: { isActive: true, name, phone: request.phone },
+          data: { isActive: true, name, phone: request.phone, tenantId },
         });
         await tx.student.update({ where: { id: created.id }, data: { userId: request.userId } });
       }
       await tx.admissionRequest.update({
         where: { id: request.id },
         data: {
+          tenantId,
           status: "APPROVED",
           roomId,
           bedId,
@@ -360,7 +385,7 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
           action: "ADMISSION_APPROVED",
           entity: "AdmissionRequest",
           entityId: request.id,
-          meta: { studentId: created.id, roomId, bedId },
+          meta: { studentId: created.id, roomId, bedId, pgId: tenantId, fromPgId: request.tenantId },
         },
       });
       await ensureGuardianParent(tx, tenantId, created, request.passwordHash);
@@ -421,10 +446,10 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
 
 admissionsRouter.post("/:id/reject", ...ownerGuard, async (req, res, next) => {
   try {
-    const tenantId = req.user!.tenantId!;
+    const tenantIds = await ownedTenantIds(req.user!.sub);
     const body = z.object({ reason: z.string().optional() }).parse(req.body ?? {});
     const request = await prisma.admissionRequest.findFirst({
-      where: { id: req.params.id as string, tenantId },
+      where: { id: req.params.id as string, tenantId: { in: tenantIds } },
     });
     if (!request) {
       res.status(404).json({ error: "Not found" });
@@ -434,6 +459,7 @@ admissionsRouter.post("/:id/reject", ...ownerGuard, async (req, res, next) => {
       res.status(400).json({ error: "This application has already been reviewed" });
       return;
     }
+    const tenantId = request.tenantId;
 
     await prisma.$transaction(async (tx) => {
       await tx.admissionRequest.update({
@@ -486,8 +512,14 @@ async function tenantName(tenantId: string): Promise<string> {
 }
 
 async function notifyOwners(tenantId: string, admissionId: string, applicantName: string) {
+  // The PG's owner may be signed into a different PG (multi-PG owners), so
+  // match by ownership as well as by active tenant.
   const owners = await prisma.user.findMany({
-    where: { tenantId, role: "OWNER", isActive: true },
+    where: {
+      role: "OWNER",
+      isActive: true,
+      OR: [{ ownedTenants: { some: { id: tenantId } } }, { tenantId }],
+    },
     select: { id: true },
   });
   const title = "New admission request";

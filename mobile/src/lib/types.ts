@@ -53,6 +53,7 @@ export interface Student {
   guardianPhone?: string | null;
   guardianEmail?: string | null;
   monthlyFee?: number | null;
+  tenantId?: string | null;
 }
 
 export interface StudentDetail extends Student {
@@ -172,6 +173,18 @@ export interface TenantSummary {
   _count?: { users: number; students: number; properties: number };
 }
 
+export interface Pg {
+  id: string;
+  name: string;
+  slug: string;
+  city?: string | null;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+  status: string;
+  isActive?: boolean;
+  _count?: { students: number; properties: number };
+}
+
 export interface TenantImage {
   id: string;
   imageUrl: string;
@@ -228,6 +241,7 @@ export interface PublicPg {
 export interface Admission {
   id: string;
   status: AdmissionStatus;
+  tenantId?: string;
   firstName: string;
   lastName?: string | null;
   gender?: string | null;
@@ -248,6 +262,7 @@ export interface Admission {
   studentId?: string | null;
   rejectionReason?: string | null;
   createdAt: string;
+  tenant?: { id: string; name: string } | null;
   documents?: DocumentFile[];
 }
 

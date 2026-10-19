@@ -14,6 +14,7 @@ import {
   statusTone,
 } from "@/components/ui";
 import { AnnouncementsCard, TenantBanner } from "@/components/branding";
+import { PgSwitcher } from "@/components/PgSwitcher";
 import { useAuth } from "@/lib/auth";
 import { greeting, money, shortDate } from "@/lib/format";
 import { space } from "@/lib/theme";
@@ -60,6 +61,7 @@ export function OwnerHome() {
       />
 
       <TenantBanner />
+      <PgSwitcher />
       <AnnouncementsCard />
 
       <ErrorText>{rooms.error || students.error || invoices.error}</ErrorText>

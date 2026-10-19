@@ -8,11 +8,38 @@ export const roomsRouter = Router();
 
 roomsRouter.use(requireAuth, requireTenant);
 
+// Owners running multiple PGs may list rooms of any PG they own with
+// ?tenantId=<pgId>. Everyone else is scoped to their own tenant.
+async function resolveTenantId(
+  userId: string,
+  role: string,
+  ownTenantId: string,
+  requested?: string
+): Promise<string | null> {
+  if (!requested || requested === ownTenantId) return ownTenantId;
+  if (role !== "OWNER") return null;
+  const pg = await prisma.tenant.findFirst({
+    where: { id: requested, ownerUserId: userId },
+    select: { id: true },
+  });
+  return pg?.id ?? null;
+}
+
 roomsRouter.get("/", requireRole("OWNER", "STAFF"), async (req, res, next) => {
   try {
     const propertyId = req.query.propertyId as string | undefined;
+    const tenantId = await resolveTenantId(
+      req.user!.sub,
+      req.user!.role,
+      req.user!.tenantId!,
+      req.query.tenantId as string | undefined
+    );
+    if (!tenantId) {
+      res.status(403).json({ error: "You cannot view rooms for that PG" });
+      return;
+    }
     const rooms = await prisma.room.findMany({
-      where: { tenantId: req.user!.tenantId!, ...(propertyId ? { propertyId } : {}) },
+      where: { tenantId, ...(propertyId ? { propertyId } : {}) },
       orderBy: { roomNumber: "asc" },
       include: { beds: { orderBy: { label: "asc" } }, _count: { select: { students: true } } },
     });

@@ -318,7 +318,11 @@ async function notifyOwners(
   data: Record<string, unknown>
 ): Promise<void> {
   const owners = await prisma.user.findMany({
-    where: { tenantId, role: "OWNER", isActive: true },
+    where: {
+      role: "OWNER",
+      isActive: true,
+      OR: [{ ownedTenants: { some: { id: tenantId } } }, { tenantId }],
+    },
     select: { id: true },
   });
   if (!owners.length) return;

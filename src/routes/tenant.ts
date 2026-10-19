@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { requireTenant } from "../middleware/tenant";
+import { signToken } from "../auth";
 import {
   storeMaybeDataUrl,
   resolveOptionalUrl,
@@ -15,6 +16,110 @@ export const tenantRouter = Router();
 
 // Every authenticated member may read their tenant's branding & details.
 tenantRouter.use(requireAuth, requireTenant);
+
+// ---------------------------------------------------------------------------
+// Multi-PG: an owner may run several PGs (A1, A2, A3…). Every PG is a Tenant
+// with ownerUserId set; User.tenantId is the *active* PG carried in the JWT.
+// ---------------------------------------------------------------------------
+
+function slugify(name: string): string {
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "") || "pg"
+  );
+}
+
+/** All PGs owned by the signed-in owner, with the active one flagged. */
+tenantRouter.get("/pgs", requireRole("OWNER"), async (req, res, next) => {
+  try {
+    const pgs = await prisma.tenant.findMany({
+      where: { ownerUserId: req.user!.sub },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        city: true,
+        logoUrl: true,
+        primaryColor: true,
+        status: true,
+        _count: { select: { students: true, properties: true } },
+      },
+    });
+    res.json({
+      pgs: await Promise.all(
+        pgs.map(async (pg) => ({
+          ...pg,
+          logoUrl: await resolveOptionalUrl(pg.logoUrl),
+          isActive: pg.id === req.user!.tenantId,
+        }))
+      ),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Create another PG for the signed-in owner. */
+tenantRouter.post("/pgs", requireRole("OWNER"), async (req, res, next) => {
+  try {
+    const body = z
+      .object({
+        name: z.string().min(1),
+        city: z.string().optional(),
+        address: z.string().optional(),
+        phone: z.string().optional(),
+      })
+      .parse(req.body);
+
+    const baseSlug = slugify(body.name);
+    let slug = baseSlug;
+    let i = 1;
+    while (await prisma.tenant.findUnique({ where: { slug } })) {
+      slug = `${baseSlug}-${i++}`;
+    }
+
+    const pg = await prisma.tenant.create({
+      data: {
+        name: body.name,
+        slug,
+        city: body.city,
+        address: body.address,
+        phone: body.phone,
+        ownerUserId: req.user!.sub,
+      },
+      select: { id: true, name: true, slug: true, city: true, status: true },
+    });
+    res.status(201).json({ pg });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Switch the owner's active PG. Returns a fresh JWT scoped to the new PG. */
+tenantRouter.post("/pgs/:id/switch", requireRole("OWNER"), async (req, res, next) => {
+  try {
+    const pg = await prisma.tenant.findFirst({
+      where: { id: req.params.id as string, ownerUserId: req.user!.sub },
+      select: { id: true, name: true, slug: true, logoUrl: true, primaryColor: true },
+    });
+    if (!pg) {
+      res.status(404).json({ error: "PG not found" });
+      return;
+    }
+    // Persist the choice so the next login lands on the same PG.
+    await prisma.user.update({ where: { id: req.user!.sub }, data: { tenantId: pg.id } });
+    const token = signToken({ sub: req.user!.sub, tenantId: pg.id, role: "OWNER" });
+    res.json({
+      token,
+      pg: { ...pg, logoUrl: await resolveOptionalUrl(pg.logoUrl) },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 const tenantSelect = {
   id: true,

@@ -4,10 +4,12 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Badge, Button, Card, ErrorText, Loading, Muted, Row, statusTone } from "@/components/ui";
 import { Avatar, DocumentGallery } from "@/components/documents";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import {
   createStudentLogin,
   deleteDocument,
   resetUserPassword,
+  transferStudent,
   updateStudent,
   uploadDocument,
 } from "@/lib/endpoints";
@@ -16,13 +18,14 @@ import { fullName, money, shortDate } from "@/lib/format";
 import { exportPdf, studentFormHtml } from "@/lib/formPdf";
 import { radius, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
-import type { DocumentFile, StudentDetail, TenantBranding } from "@/lib/types";
+import type { DocumentFile, Pg, Room, StudentDetail, TenantBranding } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
 
 export default function StudentDetailScreen() {
   const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { user } = useAuth();
   const { data, loading, error, reload } = useApi<{ student: StudentDetail }>(`/students/${id}`);
   const { data: tenantData } = useApi<{ tenant: TenantBranding }>("/tenant");
   const input = [
@@ -271,6 +274,8 @@ export default function StudentDetailScreen() {
         />
       </Card>
 
+      {user?.role === "OWNER" ? <TransferCard studentId={s.id} currentPgId={s.tenantId} /> : null}
+
       <Card style={{ gap: space(3) }}>
         <Text style={{ fontWeight: "700", color: colors.text }}>Admission form</Text>
         <Muted>
@@ -485,6 +490,176 @@ function Detail({ label, value }: { label: string; value: string }) {
     </Row>
   );
 }
+
+// Owner-only: move this student to another PG the owner manages.
+function TransferCard({ studentId, currentPgId }: { studentId: string; currentPgId?: string | null }) {
+  const { colors } = useTheme();
+  const { data: pgsData } = useApi<{ pgs: Pg[] }>("/tenant/pgs");
+  const [open, setOpen] = useState(false);
+  const [targetPg, setTargetPg] = useState<string | null>(null);
+  const { data: roomsData } = useApi<{ rooms: Room[] }>(
+    open && targetPg ? `/rooms?tenantId=${encodeURIComponent(targetPg)}` : null
+  );
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const [bedId, setBedId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const pgs = (pgsData?.pgs ?? []).filter((p) => p.id !== currentPgId);
+  if (pgs.length === 0) return null;
+
+  const rooms = roomsData?.rooms ?? [];
+  const selectedRoom = rooms.find((r) => r.id === roomId);
+  const beds = selectedRoom?.beds ?? [];
+
+  const transfer = async () => {
+    if (!targetPg) {
+      setErr("Pick a PG first");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await transferStudent(studentId, {
+        tenantId: targetPg,
+        roomId: roomId ?? undefined,
+        bedId: bedId ?? undefined,
+      });
+      setOpen(false);
+      setTargetPg(null);
+      setRoomId(null);
+      setBedId(null);
+      Alert.alert("Student moved", `Moved to ${r.pg.name}.`);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to move student");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card style={{ gap: space(3) }}>
+      <Text style={{ fontWeight: "700", color: colors.text }}>Move to another PG</Text>
+      <Muted>
+        Shift this student (and their login) to one of your other PGs. Their old invoices stay with
+        the previous PG.
+      </Muted>
+      {open ? (
+        <>
+          <View style={{ gap: space(2) }}>
+            <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>TARGET PG</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space(2) }}>
+              {pgs.map((pg) => {
+                const sel = targetPg === pg.id;
+                return (
+                  <Pressable
+                    key={pg.id}
+                    onPress={() => {
+                      setTargetPg(pg.id);
+                      setRoomId(null);
+                      setBedId(null);
+                    }}
+                    style={[
+                      chip,
+                      {
+                        borderColor: sel ? colors.primarySolid : colors.border,
+                        backgroundColor: sel ? colors.primarySolid : colors.bg,
+                      },
+                    ]}
+                  >
+                    <Text style={{ color: sel ? colors.onPrimary : colors.text, fontWeight: "600" }}>
+                      {pg.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          {targetPg ? (
+            <View style={{ gap: space(2) }}>
+              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>ROOM (OPTIONAL)</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space(2) }}>
+                {rooms.map((r) => {
+                  const sel = roomId === r.id;
+                  return (
+                    <Pressable
+                      key={r.id}
+                      onPress={() => {
+                        setRoomId(r.id);
+                        setBedId(null);
+                      }}
+                      style={[
+                        chip,
+                        {
+                          borderColor: sel ? colors.primarySolid : colors.border,
+                          backgroundColor: sel ? colors.primarySolid : colors.bg,
+                        },
+                      ]}
+                    >
+                      <Text style={{ color: sel ? colors.onPrimary : colors.text, fontWeight: "600" }}>
+                        Room {r.roomNumber}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                {rooms.length === 0 ? <Muted>No rooms in that PG yet</Muted> : null}
+              </View>
+
+              {selectedRoom && beds.length > 0 ? (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space(2) }}>
+                  {beds.map((b) => {
+                    const sel = bedId === b.id;
+                    const disabled = b.status === "OCCUPIED";
+                    return (
+                      <Pressable
+                        key={b.id}
+                        disabled={disabled}
+                        onPress={() => setBedId((cur) => (cur === b.id ? null : b.id))}
+                        style={[
+                          chip,
+                          {
+                            borderColor: sel ? colors.primarySolid : colors.border,
+                            backgroundColor: sel ? colors.primarySolid : colors.bg,
+                          },
+                          disabled && { opacity: 0.4 },
+                        ]}
+                      >
+                        <Text style={{ color: sel ? colors.onPrimary : colors.text, fontWeight: "600" }}>
+                          {b.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          <ErrorText>{err}</ErrorText>
+          <Row style={{ gap: space(3) }}>
+            <Button label="Cancel" variant="ghost" onPress={() => setOpen(false)} />
+            <Button
+              label="Move student"
+              loading={busy}
+              disabled={!targetPg}
+              onPress={() => void transfer()}
+            />
+          </Row>
+        </>
+      ) : (
+        <Button label="Move to another PG" icon="swap-horizontal-outline" onPress={() => setOpen(true)} />
+      )}
+    </Card>
+  );
+}
+
+const chip = {
+  borderWidth: 1,
+  borderRadius: radius.sm,
+  paddingHorizontal: space(3),
+  paddingVertical: space(2),
+};
 
 const inputStyle = {
   borderWidth: 1,

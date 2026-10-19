@@ -11,6 +11,7 @@ import type {
   Message,
   MessageListResult,
   Payment,
+  Pg,
   Property,
   PublicPg,
   Room,
@@ -161,6 +162,35 @@ export function broadcastNotification(input: { title: string; body: string; audi
   });
 }
 
+export function listMyPgs() {
+  return api<{ pgs: Pg[] }>("/tenant/pgs");
+}
+
+export function createPg(input: { name: string; city?: string; address?: string; phone?: string }) {
+  return api<{ pg: Pg }>("/tenant/pgs", { method: "POST", body: input });
+}
+
+export function switchPg(id: string) {
+  return api<{ token: string; pg: { id: string; name: string } }>(`/tenant/pgs/${id}/switch`, {
+    method: "POST",
+    body: {},
+  });
+}
+
+export function transferStudent(
+  id: string,
+  body: { tenantId: string; roomId?: string; bedId?: string }
+) {
+  return api<{ ok: boolean; studentId: string; pg: { id: string; name: string } }>(
+    `/students/${id}/transfer`,
+    { method: "POST", body }
+  );
+}
+
+export function exitStudent(id: string) {
+  return api<{ ok: boolean; exited: boolean }>(`/students/${id}/exit`, { method: "POST", body: {} });
+}
+
 export function getPublicPg() {
   return api<{ pg: PublicPg }>("/admissions/pg", { auth: false });
 }
@@ -217,7 +247,13 @@ export function getAdmission(id: string) {
 
 export function approveAdmission(
   id: string,
-  body: { roomId?: string; bedId?: string; monthlyFee?: number; paidForCurrentMonth?: boolean }
+  body: {
+    tenantId?: string;
+    roomId?: string;
+    bedId?: string;
+    monthlyFee?: number;
+    paidForCurrentMonth?: boolean;
+  }
 ) {
   return api<{ ok: boolean; studentId: string }>(`/admissions/${id}/approve`, {
     method: "POST",

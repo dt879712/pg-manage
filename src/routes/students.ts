@@ -344,3 +344,90 @@ studentsRouter.post("/:id/exit", async (req, res, next) => {
     next(err);
   }
 });
+
+// Shift a student to another PG owned by the same owner. Historical invoices
+// and payments stay attached to the PG where they were billed; only the
+// student (and their login + parent links) move.
+studentsRouter.post("/:id/transfer", async (req, res, next) => {
+  try {
+    const sourceTenantId = req.user!.tenantId!;
+    const body = z
+      .object({
+        tenantId: z.string().min(1),
+        roomId: z.string().optional(),
+        bedId: z.string().optional(),
+      })
+      .parse(req.body);
+
+    if (body.tenantId === sourceTenantId) {
+      res.status(400).json({ error: "This student is already in that PG" });
+      return;
+    }
+
+    const existing = await prisma.student.findFirst({
+      where: { id: (req.params.id as string), tenantId: sourceTenantId },
+    });
+    if (!existing) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    const target = await prisma.tenant.findFirst({
+      where: { id: body.tenantId, ownerUserId: req.user!.sub },
+      select: { id: true, name: true },
+    });
+    if (!target) {
+      res.status(403).json({ error: "You cannot move a student into that PG" });
+      return;
+    }
+
+    const placement = await resolvePlacement(target.id, body.roomId, body.bedId, existing.id);
+    if ("error" in placement) {
+      res.status(400).json({ error: placement.error });
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (existing.bedId) {
+        await tx.bed.update({ where: { id: existing.bedId }, data: { status: "VACANT" } });
+      }
+      if (placement.bedId) {
+        await tx.bed.update({ where: { id: placement.bedId }, data: { status: "OCCUPIED" } });
+      }
+      await tx.student.update({
+        where: { id: existing.id },
+        data: {
+          tenantId: target.id,
+          roomId: placement.roomId,
+          bedId: placement.bedId,
+        },
+      });
+      if (existing.userId) {
+        await tx.user.update({ where: { id: existing.userId }, data: { tenantId: target.id } });
+      }
+      await tx.parentStudent.updateMany({
+        where: { studentId: existing.id },
+        data: { tenantId: target.id },
+      });
+      await tx.auditLog.create({
+        data: {
+          tenantId: target.id,
+          actorId: req.user!.sub,
+          action: "STUDENT_TRANSFERRED",
+          entity: "Student",
+          entityId: existing.id,
+          meta: {
+            fromTenantId: sourceTenantId,
+            toTenantId: target.id,
+            roomId: placement.roomId,
+            bedId: placement.bedId,
+          },
+        },
+      });
+    });
+
+    res.json({ ok: true, studentId: existing.id, pg: target });
+  } catch (err) {
+    next(err);
+  }
+});

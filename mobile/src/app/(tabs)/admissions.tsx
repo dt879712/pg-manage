@@ -30,7 +30,7 @@ import { approveAdmission, rejectAdmission } from "@/lib/endpoints";
 import { fullName, shortDate } from "@/lib/format";
 import { radius, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
-import type { Admission, Room } from "@/lib/types";
+import type { Admission, Pg, Room } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
 
 function AdmissionsView() {
@@ -94,6 +94,11 @@ function AdmissionsView() {
                 <Muted numberOfLines={1}>
                   {item.phone} · {shortDate(item.createdAt)}
                 </Muted>
+                {item.tenant?.name ? (
+                  <Text numberOfLines={1} style={{ fontSize: 12, color: colors.primary, fontWeight: "600" }}>
+                    {item.tenant.name}
+                  </Text>
+                ) : null}
               </View>
               {item.room?.roomNumber ? (
                 <View style={{ minWidth: 96 }}>
@@ -133,7 +138,11 @@ function AdmissionDetail({
 }) {
   const { colors } = useTheme();
   const { data, loading, error, reload } = useApi<{ admission: Admission }>(`/admissions/${id}`);
-  const { data: roomsData } = useApi<{ rooms: Room[] }>("/rooms");
+  const { data: pgsData } = useApi<{ pgs: Pg[] }>("/tenant/pgs");
+  const [targetPg, setTargetPg] = useState<string | null>(null);
+  const { data: roomsData } = useApi<{ rooms: Room[] }>(
+    targetPg ? `/rooms?tenantId=${encodeURIComponent(targetPg)}` : "/rooms"
+  );
   const [roomId, setRoomId] = useState<string | null>(null);
   const [bedId, setBedId] = useState<string | null>(null);
   const [fee, setFee] = useState("");
@@ -146,12 +155,17 @@ function AdmissionDetail({
   const rooms = roomsData?.rooms ?? [];
   const selectedRoom = rooms.find((r) => r.id === roomId);
   const beds = selectedRoom?.beds ?? [];
+  const pgs = pgsData?.pgs ?? [];
+  // The PG this application was submitted to; the owner may re-assign it.
+  const sourcePgId = admission?.tenantId ?? null;
+  const effectivePg = targetPg ?? sourcePgId;
 
   const approve = async () => {
     setBusy("approve");
     setErr(null);
     try {
       await approveAdmission(id, {
+        tenantId: effectivePg ?? undefined,
         roomId: roomId ?? undefined,
         bedId: bedId ?? undefined,
         monthlyFee: fee.trim() ? Math.max(0, parseInt(fee.replace(/\D/g, ""), 10) || 0) : undefined,
@@ -237,6 +251,37 @@ function AdmissionDetail({
               <>
                 <Card style={{ gap: space(3) }}>
                   <SectionTitle>Allot a room</SectionTitle>
+                  {pgs.length > 1 ? (
+                    <View style={{ gap: space(2) }}>
+                      <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                        ADMISSION INTO (PG)
+                      </Text>
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space(2) }}>
+                        {pgs.map((pg) => {
+                          const sel = effectivePg === pg.id;
+                          return (
+                            <Pressable
+                              key={pg.id}
+                              onPress={() => {
+                                setTargetPg(pg.id);
+                                setRoomId(null);
+                                setBedId(null);
+                              }}
+                              style={[
+                                chipStyle,
+                                { borderColor: colors.border, backgroundColor: colors.bg },
+                                sel && { backgroundColor: colors.primarySolid, borderColor: colors.primarySolid },
+                              ]}
+                            >
+                              <Text style={{ color: sel ? colors.onPrimary : colors.text, fontWeight: "600" }}>
+                                {pg.name}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ) : null}
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space(2) }}>
                     {rooms.map((r) => (
                       <Pressable

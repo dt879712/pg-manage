@@ -10,6 +10,8 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<AuthUser>;
   signOut: () => Promise<void>;
   setUser: (user: AuthUser | null) => void;
+  switchPg: (pgId: string) => Promise<AuthUser>;
+  sessionKey: number;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -17,6 +19,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionKey, setSessionKey] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -55,8 +58,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  // Switch the owner's active PG. The server issues a fresh JWT bound to the
+  // new tenant; we persist it, drop cached responses and bump sessionKey so
+  // every mounted screen remounts and refetches against the new PG.
+  const switchPg = async (pgId: string) => {
+    const res = await api<{ token: string; pg: { id: string; name: string } }>(
+      `/tenant/pgs/${pgId}/switch`,
+      { method: "POST", body: {} }
+    );
+    await saveToken(res.token);
+    invalidateApiCache();
+    const me = await api<{ user: AuthUser }>("/auth/me");
+    setUser(me.user);
+    setSessionKey((n) => n + 1);
+    void syncPushToken();
+    return me.user;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut, setUser }}>
+    <AuthContext.Provider
+      value={{ user, loading, signIn, signOut, setUser, switchPg, sessionKey }}
+    >
       {children}
     </AuthContext.Provider>
   );
