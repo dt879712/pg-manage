@@ -1,6 +1,23 @@
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  tauri::Builder::default()
+  let mut builder = tauri::Builder::default();
+
+  // Single Instance must be the first plugin registered. It ensures a second
+  // launch (including a Windows relaunch after the window was closed) focuses
+  // the running window instead of failing with an "already running" error.
+  #[cfg(desktop)]
+  {
+    builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+      use tauri::Manager;
+      if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+      }
+    }));
+  }
+
+  builder
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
