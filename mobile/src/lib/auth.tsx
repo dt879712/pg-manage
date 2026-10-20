@@ -11,6 +11,7 @@ interface AuthContextValue {
   signOut: () => Promise<void>;
   setUser: (user: AuthUser | null) => void;
   switchPg: (pgId: string) => Promise<AuthUser>;
+  refresh: () => void;
   sessionKey: number;
 }
 
@@ -75,9 +76,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return me.user;
   };
 
+  // Force every screen to remount and refetch, keeping the current PG. This is
+  // the manual "Refresh" control — same effect as switching PG, minus the switch.
+  const refresh = () => {
+    invalidateApiCache();
+    setSessionKey((n) => n + 1);
+  };
+
   return (
     <AuthContext.Provider
-      value={{ user, loading, signIn, signOut, setUser, switchPg, sessionKey }}
+      value={{ user, loading, signIn, signOut, setUser, switchPg, refresh, sessionKey }}
     >
       {children}
     </AuthContext.Provider>

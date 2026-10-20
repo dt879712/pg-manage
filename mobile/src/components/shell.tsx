@@ -47,7 +47,7 @@ export function DesktopShell({ children }: { children: ReactNode }) {
 
 function Sidebar() {
   const { colors, isDark, toggle } = useTheme();
-  const { user } = useAuth();
+  const { user, refresh } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -116,25 +116,43 @@ function Sidebar() {
         })}
       </View>
 
-      <Pressable
-        onPress={toggle}
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: space(3),
-          marginHorizontal: space(6),
-          paddingVertical: space(2.5),
-        }}
-      >
-        <Ionicons
-          name={isDark ? "sunny-outline" : "moon-outline"}
-          size={18}
-          color={colors.muted}
-        />
-        <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 14 }}>
-          {isDark ? "Light mode" : "Dark mode"}
-        </Text>
-      </Pressable>
+      <View style={{ gap: space(2) }}>
+        <Pressable
+          onPress={refresh}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: space(3),
+            marginHorizontal: space(6),
+            paddingVertical: space(2.5),
+          }}
+        >
+          <Ionicons name="refresh-outline" size={18} color={colors.muted} />
+          <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 14 }}>
+            Refresh
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={toggle}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: space(3),
+            marginHorizontal: space(6),
+            paddingVertical: space(2.5),
+          }}
+        >
+          <Ionicons
+            name={isDark ? "sunny-outline" : "moon-outline"}
+            size={18}
+            color={colors.muted}
+          />
+          <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 14 }}>
+            {isDark ? "Light mode" : "Dark mode"}
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }

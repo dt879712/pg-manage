@@ -95,16 +95,25 @@ tenantRouter.post("/pgs", requireRole("OWNER"), async (req, res, next) => {
       slug = `${baseSlug}-${i++}`;
     }
 
-    const pg = await prisma.tenant.create({
-      data: {
-        name: body.name,
-        slug,
-        city: body.city,
-        address: body.address,
-        phone: body.phone,
-        ownerUserId: req.user!.sub,
-      },
-      select: { id: true, name: true, slug: true, city: true, status: true },
+    // Create the tenant and a default Property together. Rooms (and everything
+    // that depends on rooms) require a propertyId, so every branch must have at
+    // least one property from the moment it exists.
+    const pg = await prisma.$transaction(async (tx) => {
+      const created = await tx.tenant.create({
+        data: {
+          name: body.name,
+          slug,
+          city: body.city,
+          address: body.address,
+          phone: body.phone,
+          ownerUserId: req.user!.sub,
+        },
+        select: { id: true, name: true, slug: true, city: true, status: true },
+      });
+      await tx.property.create({
+        data: { tenantId: created.id, name: created.name, type: "PG", city: body.city },
+      });
+      return created;
     });
     res.status(201).json({ pg });
   } catch (err) {
