@@ -253,7 +253,7 @@ export function profileFormHtml(r: ProfileFormInput): string {
 async function exportPdfOnWeb(html: string, filename: string): Promise<void> {
   const mod = await import("html2pdf.js");
   const html2pdf = mod.default ?? mod;
-  await html2pdf()
+  const worker = html2pdf()
     .set({
       margin: 0,
       filename,
@@ -262,14 +262,43 @@ async function exportPdfOnWeb(html: string, filename: string): Promise<void> {
       jsPDF: { unit: "pt", format: "a4", orientation: "portrait" },
       pagebreak: { mode: ["css", "legacy"] },
     })
-    .from(html)
-    .save();
+    .from(html);
+
+  // Inside the desktop app the page runs in a Tauri webview, where a plain
+  // blob/anchor download is silently dropped. Ask the OS for a save location
+  // and write the bytes with the native filesystem instead.
+  if (isTauri()) {
+    const blob: Blob = await worker.outputPdf("blob");
+    await saveBlobViaTauri(blob, filename);
+    return;
+  }
+
+  await worker.save();
+}
+
+function isTauri(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+async function saveBlobViaTauri(blob: Blob, filename: string): Promise<void> {
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  const { writeFile } = await import("@tauri-apps/plugin-fs");
+
+  const path = await save({
+    defaultPath: filename,
+    filters: [{ name: "PDF", extensions: ["pdf"] }],
+  });
+  if (!path) return; // user cancelled
+
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  await writeFile(path, bytes);
 }
 
 /**
  * One entry point for "download this HTML as a PDF":
  * - Web: browser saves the file straight to the Downloads folder.
- * - Mobile: native share sheet opens (Save to Files / Downloads / Drive…).
+ * - Mobile: saves the file to a folder the user picks (Android) or the app's
+ *   Documents directory, without opening the share sheet.
  */
 export async function exportPdf(html: string, filename: string): Promise<void> {
   if (Platform.OS === "web") {
@@ -278,6 +307,22 @@ export async function exportPdf(html: string, filename: string): Promise<void> {
   }
 
   const { uri, base64 } = await Print.printToFileAsync({ html, base64: true });
+  if (!base64) {
+    // No bytes to copy — fall back to sharing the file we already wrote.
+    await shareFile(uri, filename);
+    return;
+  }
+
+  try {
+    await saveBase64File(base64, filename, "application/pdf");
+  } catch {
+    // Saving failed (e.g. user dismissed the folder picker) — offer the share
+    // sheet so the download is still possible.
+    await shareFile(uri, filename);
+  }
+}
+
+async function shareFile(uri: string, filename: string): Promise<void> {
   const Sharing = await import("expo-sharing");
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(uri, {
@@ -285,9 +330,5 @@ export async function exportPdf(html: string, filename: string): Promise<void> {
       dialogTitle: filename,
       UTI: "com.adobe.pdf",
     });
-    return;
   }
-
-  if (!base64) throw new Error("Could not create the PDF");
-  await saveBase64File(base64, filename, "application/pdf");
 }

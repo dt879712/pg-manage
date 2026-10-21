@@ -7,6 +7,8 @@
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@tauri-apps/api": "^2.12.3",
+    "@tauri-apps/plugin-dialog": "^2.8.3",
+    "@tauri-apps/plugin-fs": "^2.7.1",
     "expo": "~57.0.26",
     "expo-camera": "~57.0.6",
     "expo-clipboard": "~57.0.2",
