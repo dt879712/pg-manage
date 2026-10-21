@@ -80,7 +80,7 @@ export function createStaff(input: { name: string; email: string; password: stri
   return api<{ user: ManagedUser }>("/users/staff", { method: "POST", body: input });
 }
 
-export function createStudentLogin(input: { studentId: string; email: string; password?: string }) {
+export function createStudentLogin(input: { studentId: string; email?: string; phone?: string; password?: string }) {
   return api<{ user: ManagedUser; temporaryPassword?: string }>("/users/students", {
     method: "POST",
     body: input,

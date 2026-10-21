@@ -206,7 +206,9 @@ function UsersView() {
                 <Text numberOfLines={1} style={{ fontWeight: "700", color: colors.text }}>
                   {u.name}
                 </Text>
-                <Muted numberOfLines={1}>{u.email}</Muted>
+                <Muted numberOfLines={1}>
+                  {u.email.endsWith("@devhostel.local") ? u.phone ?? u.email : u.email}
+                </Muted>
               </View>
             </View>
           </Pressable>

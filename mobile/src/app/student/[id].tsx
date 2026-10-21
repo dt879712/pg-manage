@@ -120,9 +120,12 @@ export default function StudentDetailScreen() {
     setLoginBusy(true);
     setLoginErr(null);
     try {
+      const id = loginEmail.trim();
+      const isEmail = id.includes("@");
       const r = await createStudentLogin({
         studentId: s.id,
-        email: loginEmail.trim(),
+        email: isEmail ? id : undefined,
+        phone: isEmail ? undefined : id,
         password: loginPassword.length >= 6 ? loginPassword : undefined,
       });
       setLoginEmail("");
@@ -131,7 +134,7 @@ export default function StudentDetailScreen() {
       Alert.alert(
         "Login created",
         r.temporaryPassword
-          ? `Email: ${r.user.email}\nTemporary password:\n\n${r.temporaryPassword}\n\nShare it with the student.`
+          ? `Login: ${isEmail ? r.user.email : s.phone ?? id}\nTemporary password:\n\n${r.temporaryPassword}\n\nShare it with the student.`
           : "Student login created."
       );
     } catch (e) {
@@ -378,11 +381,11 @@ export default function StudentDetailScreen() {
           </>
         ) : (
           <>
-            <Muted>Create an app login for this student.</Muted>
+            <Muted>Create an app login for this student. Enter an email or a mobile number.</Muted>
             <TextInput
               value={loginEmail}
               onChangeText={setLoginEmail}
-              placeholder="Email"
+              placeholder="Email or mobile number"
               placeholderTextColor={colors.muted}
               autoCapitalize="none"
               keyboardType="email-address"

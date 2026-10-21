@@ -13,6 +13,16 @@ export const usersRouter = Router();
 // Account management is Owner-only.
 usersRouter.use(requireAuth, requireTenant, requireRole("OWNER"));
 
+// Logins must have a unique email (the DB requires it), but owners often only
+// have a student's or parent's mobile number. When no email is supplied we
+// derive a stable placeholder from the phone so the account can still be
+// created and later signed in with the phone number.
+function accountEmail(email?: string, phone?: string): string {
+  if (email?.trim()) return email.trim().toLowerCase();
+  const digits = (phone ?? "").replace(/\D/g, "");
+  return `user-${digits || "unknown"}@devhostel.local`;
+}
+
 usersRouter.get("/", async (req, res, next) => {
   try {
     const role = z
@@ -106,12 +116,17 @@ usersRouter.post("/parents", async (req, res, next) => {
       .object({
         studentId: z.string().min(1),
         name: z.string().min(1),
-        email: z.string().email(),
+        email: z.string().email().optional(),
         phone: z.string().optional(),
         password: z.string().min(6),
         relation: z.string().optional(),
       })
       .parse(req.body);
+
+    if (!body.email && !body.phone?.trim()) {
+      res.status(400).json({ error: "Enter an email or a mobile number" });
+      return;
+    }
 
     const student = await prisma.student.findFirst({
       where: { id: body.studentId, tenantId },
@@ -121,12 +136,21 @@ usersRouter.post("/parents", async (req, res, next) => {
       return;
     }
 
-    let parent = await prisma.user.findUnique({ where: { email: body.email } });
+    const email = accountEmail(body.email, body.phone);
+    const phone = body.phone?.trim();
+    let parent = await prisma.user.findFirst({
+      where: {
+        tenantId,
+        role: "PARENT",
+        OR: [{ email }, ...(phone ? [{ phone }] : [])],
+      },
+      orderBy: { createdAt: "asc" },
+    });
     if (!parent) {
       parent = await prisma.user.create({
         data: {
           name: body.name,
-          email: body.email,
+          email,
           phone: body.phone,
           passwordHash: await hashPassword(body.password),
           role: "PARENT",
@@ -158,17 +182,23 @@ usersRouter.post("/parents", async (req, res, next) => {
 });
 
 // Create a login for a student (Owner only). No email/SMS provider needed.
+// The owner can identify the login by email OR by mobile number.
 usersRouter.post("/students", async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId!;
     const body = z
       .object({
         studentId: z.string().min(1),
-        email: z.string().email(),
-        password: z.string().min(6).optional(),
+        email: z.string().email().optional(),
         phone: z.string().optional(),
+        password: z.string().min(6).optional(),
       })
       .parse(req.body);
+
+    if (!body.email && !body.phone?.trim()) {
+      res.status(400).json({ error: "Enter an email or a mobile number" });
+      return;
+    }
 
     const student = await prisma.student.findFirst({ where: { id: body.studentId, tenantId } });
     if (!student) {
@@ -179,9 +209,10 @@ usersRouter.post("/students", async (req, res, next) => {
       res.status(409).json({ error: "Student already has a login" });
       return;
     }
-    const existing = await prisma.user.findUnique({ where: { email: body.email } });
+    const email = accountEmail(body.email, body.phone ?? student.phone ?? undefined);
+    const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
-      res.status(409).json({ error: "Email already registered" });
+      res.status(409).json({ error: "That login is already registered" });
       return;
     }
 
@@ -192,7 +223,7 @@ usersRouter.post("/students", async (req, res, next) => {
       const created = await tx.user.create({
         data: {
           name,
-          email: body.email,
+          email,
           phone: body.phone ?? student.phone,
           passwordHash,
           role: "STUDENT",

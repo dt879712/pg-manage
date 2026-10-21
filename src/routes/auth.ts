@@ -91,13 +91,14 @@ authRouter.post("/login", async (req, res, next) => {
       .object({ email: z.string().min(1), password: z.string().min(1) })
       .parse(req.body);
 
-    // Students/staff/owners sign in with their email; parents can use the
-    // guardian mobile number instead (they share the student's password).
+    // Students/staff/owners can sign in with email; students and parents may
+    // also sign in with their mobile number (accounts created by phone get a
+    // placeholder email, so the phone is the only thing the user knows).
     const identifier = body.email.trim();
     const user = identifier.includes("@")
       ? await prisma.user.findUnique({ where: { email: identifier.toLowerCase() } })
       : await prisma.user.findFirst({
-          where: { phone: identifier, role: "PARENT" },
+          where: { phone: identifier, role: { in: ["PARENT", "STUDENT"] } },
           orderBy: { createdAt: "asc" },
         });
     if (!user) {
