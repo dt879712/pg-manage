@@ -379,7 +379,7 @@ model Attendance {
   @@map("attendances")
 }
 
-// 15-second live check-in/out video. Only the latest clip per student is kept
+// 6-second live check-in/out video. Only the latest clip per student is kept
 // (the previous one is removed from storage and the DB on each new upload).
 model StudentStatusVideo {
   id           String         @id @default(cuid())
@@ -467,6 +467,7 @@ model Document {
   admissionRequest   AdmissionRequest? @relation(fields: [admissionRequestId], references: [id], onDelete: Cascade)
   type         DocumentType @default(OTHER)
   title        String?
+  side         String?
   fileUrl      String
   mimeType     String?
   uploadedById String?
@@ -504,6 +505,7 @@ model AdmissionRequest {
   guardianName  String?
   guardianPhone String?
   guardianEmail String?
+  guardianPasswordHash String?
 
   passwordHash String
   userId       String? @unique

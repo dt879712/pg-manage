@@ -78,7 +78,11 @@ export function getToken(): string | null {
 export class ApiError extends Error {
   status: number;
   data: { canReset?: boolean; error?: string } | null;
-  constructor(message: string, status: number, data: { canReset?: boolean; error?: string } | null = null) {
+  constructor(
+    message: string,
+    status: number,
+    data: { canReset?: boolean; error?: string } | null = null
+  ) {
     super(message);
     this.status = status;
     this.data = data;

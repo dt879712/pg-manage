@@ -49,6 +49,8 @@ export default function Login() {
     return () => setRetryListener(null);
   }, []);
 
+  // Every account (student, parent, staff, owner) has its own unique mobile
+  // number, so a phone number resolves to exactly one account — no chooser.
   const submit = async () => {
     setError(null);
     setResetAvailable(null);
@@ -156,7 +158,7 @@ export default function Login() {
             <Text style={{ color: colors.muted, fontSize: 13, flex: 1 }}>{notice}</Text>
           </View>
         ) : null}
-        <Button label="Sign in" onPress={submit} loading={loading} block icon="log-in-outline" />
+        <Button label="Sign in" onPress={() => submit()} loading={loading} block icon="log-in-outline" />
         {resetAvailable === true ? (
           <Pressable
             onPress={() => router.push("/forgot-password")}

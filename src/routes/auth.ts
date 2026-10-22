@@ -88,19 +88,27 @@ authRouter.post("/register-owner", async (req, res, next) => {
 authRouter.post("/login", async (req, res, next) => {
   try {
     const body = z
-      .object({ email: z.string().min(1), password: z.string().min(1) })
+      .object({
+        email: z.string().min(1),
+        password: z.string().min(1),
+      })
       .parse(req.body);
 
     // Students/staff/owners can sign in with email; students and parents may
-    // also sign in with their mobile number (accounts created by phone get a
-    // placeholder email, so the phone is the only thing the user knows).
+    // also sign in with their mobile number. Every account has its own unique
+    // phone number, so a number resolves to exactly one account — no chooser.
     const identifier = body.email.trim();
-    const user = identifier.includes("@")
-      ? await prisma.user.findUnique({ where: { email: identifier.toLowerCase() } })
-      : await prisma.user.findFirst({
-          where: { phone: identifier, role: { in: ["PARENT", "STUDENT"] } },
-          orderBy: { createdAt: "asc" },
-        });
+
+    let user;
+    if (identifier.includes("@")) {
+      user = await prisma.user.findUnique({ where: { email: identifier.toLowerCase() } });
+    } else {
+      user = await prisma.user.findFirst({
+        where: { phone: identifier },
+        orderBy: { createdAt: "asc" },
+      });
+    }
+
     if (!user) {
       // Only owners can self-reset; everyone else is told to contact their owner.
       res.status(401).json({ error: "Invalid credentials", canReset: false });
@@ -207,7 +215,10 @@ authRouter.post("/forgot-password", async (req, res, next) => {
       },
     });
 
-    res.json({ ok: true, needsEmail: mailConfigured(), devLink: delivered ? null : link });
+    // Never return the reset link in the response — it would let anyone who
+    // knows an owner's email take over the account. When email isn't
+    // configured the link is only written to the server log for local dev.
+    res.json({ ok: true, needsEmail: mailConfigured() });
   } catch (err) {
     next(err);
   }

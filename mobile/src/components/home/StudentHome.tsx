@@ -55,7 +55,7 @@ export function StudentHome({ name }: { name: string }) {
       <Card style={{ gap: space(2) }}>
         <Text style={{ fontWeight: "700", color: colors.text }}>Check-in/out videos</Text>
         <Muted>
-          The gate guard records a 15-second video when you enter or leave the PG. Your parents can
+          The gate guard records a 6-second video when you enter or leave the PG. Your parents can
           watch it too. The previous clip is replaced automatically.
         </Muted>
       </Card>

@@ -6,7 +6,6 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  Switch,
   Text,
   TextInput,
   View,
@@ -146,7 +145,7 @@ function AdmissionDetail({
   const [roomId, setRoomId] = useState<string | null>(null);
   const [bedId, setBedId] = useState<string | null>(null);
   const [fee, setFee] = useState("");
-  const [paidNow, setPaidNow] = useState(false);
+  const [paidNow, setPaidNow] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<null | "approve" | "reject">(null);
   const [err, setErr] = useState<string | null>(null);
@@ -169,7 +168,12 @@ function AdmissionDetail({
         roomId: roomId ?? undefined,
         bedId: bedId ?? undefined,
         monthlyFee: fee.trim() ? Math.max(0, parseInt(fee.replace(/\D/g, ""), 10) || 0) : undefined,
-        paidForCurrentMonth: paidNow,
+        paidForCurrentMonth: paidNow.trim()
+          ? Math.max(0, parseInt(paidNow.replace(/\D/g, ""), 10) || 0) > 0
+          : false,
+        paidAmount: paidNow.trim()
+          ? Math.max(0, parseInt(paidNow.replace(/\D/g, ""), 10) || 0)
+          : undefined,
       });
       onDone();
     } catch (e) {
@@ -345,18 +349,27 @@ function AdmissionDetail({
                       ]}
                     />
                     <Muted style={{ fontSize: 12 }}>Charged per student. Picking a room prefills its rent.</Muted>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: space(3) }}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ color: colors.text, fontWeight: "600", fontSize: 13 }}>
-                          Paid for current month
-                        </Text>
-                        <Muted style={{ fontSize: 12 }}>{"Record this month's fee as received now."}</Muted>
-                      </View>
-                      <Switch
+                    <View style={{ gap: 4 }}>
+                      <Text style={{ color: colors.text, fontWeight: "600", fontSize: 13 }}>
+                        Paid now (₹)
+                      </Text>
+                      <TextInput
                         value={paidNow}
-                        onValueChange={setPaidNow}
-                        disabled={fee.trim().length === 0}
+                        onChangeText={setPaidNow}
+                        placeholder="Leave blank if nothing paid yet"
+                        placeholderTextColor={colors.muted}
+                        keyboardType="number-pad"
+                        editable={fee.trim().length > 0}
+                        style={[
+                          inputStyle,
+                          { borderColor: colors.border, color: colors.text, backgroundColor: colors.bg },
+                          fee.trim().length === 0 && { opacity: 0.5 },
+                        ]}
                       />
+                      <Muted style={{ fontSize: 12 }}>
+                        First month&apos;s fee is added to the due list automatically. Part payments keep
+                        the remaining balance due.
+                      </Muted>
                     </View>
                   </View>
                   <Muted style={{ fontSize: 12 }}>

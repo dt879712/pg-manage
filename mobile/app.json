@@ -45,7 +45,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Dev Hostel to access your camera to record 15-second check-in/out videos.",
+          "cameraPermission": "Allow Dev Hostel to access your camera to record 6-second check-in/out videos.",
           "microphonePermission": "Allow Dev Hostel to access your microphone while recording check-in/out videos.",
           "recordAudioAndroid": true
         }

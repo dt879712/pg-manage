@@ -2,10 +2,12 @@ import { Router } from "express";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
+import { hashPassword } from "../auth";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { requireTenant } from "../middleware/tenant";
 import { parsePagination } from "../lib/pagination";
 import { storeMaybeDataUrl, resolveOptionalUrl, resolveMediaUrl } from "../lib/fileStore";
+import { accountEmailFor } from "../lib/guardian";
 
 export const studentsRouter = Router();
 
@@ -33,6 +35,14 @@ const studentBody = z.object({
 const studentCreateBody = studentBody.extend({
   paidForCurrentMonth: z.boolean().optional(),
   paidAmount: z.number().int().positive().optional(),
+  // Optional logins created together with the student. When supplied, the
+  // student and guardian accounts are created and linked in the same step.
+  studentEmail: z.string().email().optional(),
+  studentPhone: z.string().optional(),
+  studentPassword: z.string().min(6).optional(),
+  parentEmail: z.string().email().optional(),
+  parentPhone: z.string().optional(),
+  parentPassword: z.string().min(6).optional(),
 });
 
 async function resolvePlacement(
@@ -113,6 +123,35 @@ studentsRouter.post("/", async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId!;
     const body = studentCreateBody.parse(req.body);
+
+    // Login identifiers must be unique across all accounts (a mobile number or
+    // email resolves to exactly one account). Reject clashes up front with a
+    // clear message instead of surfacing a raw database error later.
+    const studentId = body.studentPhone?.trim() || body.studentEmail?.trim().toLowerCase();
+    const parentId = body.parentPhone?.trim() || body.parentEmail?.trim().toLowerCase();
+    if (studentId && parentId && studentId === parentId) {
+      res.status(400).json({ error: "The student and parent need different mobile numbers or emails." });
+      return;
+    }
+    for (const id of [
+      { label: "Student", email: body.studentEmail?.trim().toLowerCase(), phone: body.studentPhone?.trim() },
+      { label: "Parent", email: body.parentEmail?.trim().toLowerCase(), phone: body.parentPhone?.trim() },
+    ]) {
+      const where = [
+        ...(id.email ? [{ email: accountEmailFor(id.email, undefined) }] : []),
+        ...(id.phone ? [{ phone: id.phone }] : []),
+      ];
+      if (where.length === 0) continue;
+      const clash = await prisma.user.findFirst({ where: { OR: where } });
+      if (clash) {
+        const which = id.email ?? id.phone;
+        res.status(409).json({
+          error: `${id.label} login "${which}" is already used by another account. Every account needs its own mobile number or email.`,
+        });
+        return;
+      }
+    }
+
     const placement = await resolvePlacement(tenantId, body.roomId, body.bedId);
     if ("error" in placement) {
       res.status(400).json({ error: placement.error });
@@ -149,9 +188,17 @@ studentsRouter.post("/", async (req, res, next) => {
       if (placement.bedId) {
         await tx.bed.update({ where: { id: placement.bedId }, data: { status: "OCCUPIED" } });
       }
-      const amount = body.paidAmount ?? body.monthlyFee ?? 0;
-      if (body.paidForCurrentMonth && amount > 0) {
-        const now = new Date();
+      const amount = body.monthlyFee ?? 0;
+      const now = new Date();
+      if (amount > 0) {
+        // First month's fee goes on the books straight away. Any amount
+        // collected at admission is recorded as a payment; the invoice status
+        // (PAID / PARTIAL / PENDING) is derived from it, so a part payment
+        // shows the correct remaining balance on the due list.
+        const paid = body.paidForCurrentMonth
+          ? Math.min(Math.max(body.paidAmount ?? amount, 0), amount)
+          : 0;
+        const status = paid >= amount ? "PAID" : paid > 0 ? "PARTIAL" : "PENDING";
         const invoice = await tx.invoice.create({
           data: {
             tenantId,
@@ -160,22 +207,69 @@ studentsRouter.post("/", async (req, res, next) => {
             amount,
             periodMonth: now.getMonth() + 1,
             periodYear: now.getFullYear(),
-            status: "PAID",
-            dueDate: now,
+            status,
+            dueDate: body.joinDate ?? now,
           },
         });
-        await tx.payment.create({
+        if (paid > 0) {
+          await tx.payment.create({
+            data: {
+              tenantId,
+              studentId: created.id,
+              invoiceId: invoice.id,
+              amount: paid,
+              method: "CASH",
+              note: paid >= amount ? "Paid on admission" : "Part payment on admission",
+              recordedById: req.user!.sub,
+            },
+          });
+        }
+      }
+
+      const fullName = [created.firstName, created.lastName].filter(Boolean).join(" ");
+      const thePhone = body.studentPhone?.trim() || body.phone?.trim() || undefined;
+      const theEmail = body.studentEmail?.trim() || body.email?.trim() || undefined;
+
+      // Student login (optional): log in with the student's own mobile/email.
+      if (body.studentPassword && (theEmail || thePhone)) {
+        const studentUser = await tx.user.create({
+          data: {
+            name: fullName,
+            email: accountEmailFor(theEmail, thePhone),
+            phone: thePhone,
+            passwordHash: await hashPassword(body.studentPassword),
+            role: "STUDENT",
+            tenantId,
+          },
+        });
+        await tx.student.update({ where: { id: created.id }, data: { userId: studentUser.id } });
+      }
+
+      // Guardian login (optional), created and linked to the student in the
+      // same step. Uses the guardian's own mobile/email and password.
+      if (body.parentPassword && (body.parentEmail?.trim() || body.parentPhone?.trim())) {
+        const parentPhone = body.parentPhone?.trim() || undefined;
+        const parentEmail = body.parentEmail?.trim() || undefined;
+        const parentUser = await tx.user.create({
+          data: {
+            name: body.guardianName?.trim() || `Guardian of ${created.firstName}`,
+            email: accountEmailFor(parentEmail, parentPhone),
+            phone: parentPhone,
+            passwordHash: await hashPassword(body.parentPassword),
+            role: "PARENT",
+            tenantId,
+          },
+        });
+        await tx.parentStudent.create({
           data: {
             tenantId,
+            parentUserId: parentUser.id,
             studentId: created.id,
-            invoiceId: invoice.id,
-            amount,
-            method: "CASH",
-            note: "Paid on admission",
-            recordedById: req.user!.sub,
+            relation: "Guardian",
           },
         });
       }
+
       return created;
     });
 
@@ -289,6 +383,7 @@ studentsRouter.patch("/:id", async (req, res, next) => {
           guardianPhone: body.guardianPhone,
           guardianEmail: body.guardianEmail,
           monthlyFee: body.monthlyFee,
+          joinDate: body.joinDate,
         },
       });
     });

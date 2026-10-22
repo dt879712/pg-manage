@@ -41,7 +41,7 @@ export default function PrivacyPolicy() {
       <Section title="Information we collect">
         Account details (name, email address, phone number, role); hostel/tenant profile and room
         records; student records (name, room, contact and guardian details); fee invoices and
-        payment records; attendance/check-in and check-out times; and short (about 15-second)
+        payment records; attendance/check-in and check-out times; and short (about 6-second)
         check-in/check-out videos captured at the gate. We also collect a device push token so we
         can send notifications, and basic technical data needed to operate the service.
       </Section>

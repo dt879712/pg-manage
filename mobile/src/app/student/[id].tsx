@@ -52,6 +52,7 @@ export default function StudentDetailScreen() {
     guardianPhone: "",
     guardianEmail: "",
     fee: "",
+    joinDate: "",
   });
 
   if (loading) return <Loading />;
@@ -70,6 +71,7 @@ export default function StudentDetailScreen() {
       guardianPhone: s.guardianPhone ?? "",
       guardianEmail: s.guardianEmail ?? "",
       fee: s.monthlyFee != null ? String(s.monthlyFee) : "",
+      joinDate: s.joinDate ? s.joinDate.slice(0, 10) : "",
     });
     setErr(null);
     setEditOpen(true);
@@ -94,6 +96,7 @@ export default function StudentDetailScreen() {
         monthlyFee: ef.fee.trim()
           ? Math.max(0, parseInt(ef.fee.replace(/\D/g, ""), 10) || 0)
           : null,
+        joinDate: ef.joinDate.trim() ? ef.joinDate.trim() : null,
       });
       setEditOpen(false);
       reload();
@@ -256,6 +259,7 @@ export default function StudentDetailScreen() {
         <Detail label="Guardian phone" value={s.guardianPhone ?? "-"} />
         <Detail label="Guardian email" value={s.guardianEmail ?? "-"} />
         <Detail label="Monthly fee" value={s.monthlyFee != null ? `${money(s.monthlyFee)} / month` : "-"} />
+        <Detail label="Admission date" value={s.joinDate ? shortDate(s.joinDate) : "-"} />
         <Button label="Edit profile & fee" icon="create-outline" onPress={openEdit} />
         <Button
           label={s.photoUrl ? "Change photo" : "Add photo"}
@@ -469,6 +473,10 @@ export default function StudentDetailScreen() {
                 <View style={{ gap: 2 }}>
                   <TextInput value={ef.fee} onChangeText={(v) => setEf((p) => ({ ...p, fee: v }))} placeholder="Monthly fee (₹)" placeholderTextColor={colors.muted} keyboardType="number-pad" style={input} />
                   <Muted>Increase this when rent rises. Leave blank to clear.</Muted>
+                </View>
+                <View style={{ gap: 2 }}>
+                  <TextInput value={ef.joinDate} onChangeText={(v) => setEf((p) => ({ ...p, joinDate: v }))} placeholder="Admission date (YYYY-MM-DD)" placeholderTextColor={colors.muted} autoCapitalize="none" style={input} />
+                  <Muted>Leave blank to clear.</Muted>
                 </View>
               </ScrollView>
               <ErrorText>{err}</ErrorText>

@@ -17,6 +17,7 @@ const docBody = z.object({
   userId: z.string().optional(),
   type: z.enum(["ID_PROOF", "PHOTO", "AGREEMENT", "OTHER"]).optional(),
   title: z.string().optional(),
+  side: z.enum(["front", "back"]).optional(),
   dataUrl: z.string().min(1),
   mimeType: z.string().optional(),
 });
@@ -155,6 +156,7 @@ documentsRouter.post(
         userId: body.userId,
         type: body.type ?? "OTHER",
         title: body.title,
+        side: body.side,
         fileUrl: stored.fileUrl,
         mimeType: stored.mimeType,
         uploadedById: req.user!.sub,

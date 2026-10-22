@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Button, Card, ErrorText, Loading, Muted } from "@/components/ui";
 import { Avatar } from "@/components/documents";
@@ -23,16 +23,23 @@ export default function NewStudent() {
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [joinDate, setJoinDate] = useState("");
   const [guardianName, setGuardianName] = useState("");
   const [guardianPhone, setGuardianPhone] = useState("");
   const [guardianEmail, setGuardianEmail] = useState("");
   const [photo, setPhoto] = useState<PickedImage | null>(null);
-  const [studentIdDoc, setStudentIdDoc] = useState<PickedImage | null>(null);
-  const [parentIdDoc, setParentIdDoc] = useState<PickedImage | null>(null);
+  const [studentIdFront, setStudentIdFront] = useState<PickedImage | null>(null);
+  const [studentIdBack, setStudentIdBack] = useState<PickedImage | null>(null);
+  const [parentIdFront, setParentIdFront] = useState<PickedImage | null>(null);
+  const [parentIdBack, setParentIdBack] = useState<PickedImage | null>(null);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [bedId, setBedId] = useState<string | null>(null);
   const [fee, setFee] = useState("");
-  const [paidNow, setPaidNow] = useState(false);
+  const [paidNow, setPaidNow] = useState("");
+  const [studentLoginId, setStudentLoginId] = useState("");
+  const [studentLoginPass, setStudentLoginPass] = useState("");
+  const [parentLoginId, setParentLoginId] = useState("");
+  const [parentLoginPass, setParentLoginPass] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -41,6 +48,14 @@ export default function NewStudent() {
   const beds = selected?.beds ?? [];
 
   const submit = async () => {
+    if (studentLoginId.trim() && studentLoginPass.trim().length < 6) {
+      setErr("Student password must be at least 6 characters.");
+      return;
+    }
+    if (parentLoginId.trim() && parentLoginPass.trim().length < 6) {
+      setErr("Parent password must be at least 6 characters.");
+      return;
+    }
     setBusy(true);
     setErr(null);
     try {
@@ -53,30 +68,41 @@ export default function NewStudent() {
         guardianPhone: guardianPhone.trim() || undefined,
         guardianEmail: guardianEmail.trim() || undefined,
         photoUrl: photo?.dataUrl,
+        studentEmail: studentLoginId.includes("@") ? studentLoginId.trim() : undefined,
+        studentPhone: studentLoginId.trim() && !studentLoginId.includes("@") ? studentLoginId.trim() : undefined,
+        studentPassword: studentLoginId.trim() ? studentLoginPass.trim() : undefined,
+        parentEmail: parentLoginId.includes("@") ? parentLoginId.trim() : undefined,
+        parentPhone: parentLoginId.trim() && !parentLoginId.includes("@") ? parentLoginId.trim() : undefined,
+        parentPassword: parentLoginId.trim() ? parentLoginPass.trim() : undefined,
         monthlyFee: fee.trim()
           ? Math.max(0, parseInt(fee.replace(/\D/g, ""), 10) || 0)
           : undefined,
-        paidForCurrentMonth: paidNow,
+        paidForCurrentMonth: paidNow.trim()
+          ? Math.max(0, parseInt(paidNow.replace(/\D/g, ""), 10) || 0) > 0
+          : false,
+        paidAmount: paidNow.trim()
+          ? Math.max(0, parseInt(paidNow.replace(/\D/g, ""), 10) || 0)
+          : undefined,
         roomId: roomId ?? undefined,
         bedId: bedId ?? undefined,
+        joinDate: joinDate.trim() ? joinDate.trim() : undefined,
       });
       const studentId = res.student.id;
-      if (studentIdDoc) {
+      const docs: { title: string; side: "front" | "back"; image: PickedImage | null }[] = [
+        { title: "Student ID", side: "front", image: studentIdFront },
+        { title: "Student ID", side: "back", image: studentIdBack },
+        { title: "Parent ID", side: "front", image: parentIdFront },
+        { title: "Parent ID", side: "back", image: parentIdBack },
+      ];
+      for (const doc of docs) {
+        if (!doc.image) continue;
         await uploadDocument({
           studentId,
           type: "ID_PROOF",
-          title: "Student ID",
-          dataUrl: studentIdDoc.dataUrl,
-          mimeType: studentIdDoc.mimeType,
-        });
-      }
-      if (parentIdDoc) {
-        await uploadDocument({
-          studentId,
-          type: "ID_PROOF",
-          title: "Parent ID",
-          dataUrl: parentIdDoc.dataUrl,
-          mimeType: parentIdDoc.mimeType,
+          title: doc.title,
+          side: doc.side,
+          dataUrl: doc.image.dataUrl,
+          mimeType: doc.image.mimeType,
         });
       }
       router.back();
@@ -128,6 +154,14 @@ export default function NewStudent() {
         <TextInput value={lastName} onChangeText={setLastName} placeholder="Last name" placeholderTextColor={colors.muted} style={input} />
         <TextInput value={phone} onChangeText={setPhone} placeholder="Phone" placeholderTextColor={colors.muted} keyboardType="phone-pad" style={input} />
         <TextInput
+          value={joinDate}
+          onChangeText={setJoinDate}
+          placeholder="Admission date (YYYY-MM-DD)"
+          placeholderTextColor={colors.muted}
+          autoCapitalize="none"
+          style={input}
+        />
+        <TextInput
           value={address}
           onChangeText={setAddress}
           placeholder="Address"
@@ -153,24 +187,88 @@ export default function NewStudent() {
       </Card>
 
       <Card style={{ gap: space(3) }}>
+        <Text style={labelStyle}>Login details</Text>
+        <Muted>
+          Set a login for the student and the parent so each can sign in with their own mobile
+          number or email. Leave a section blank to skip it.
+        </Muted>
+
+        <Text style={{ color: colors.text, fontWeight: "600" }}>Student</Text>
+        <TextInput
+          value={studentLoginId}
+          onChangeText={setStudentLoginId}
+          placeholder="Student mobile number or email"
+          placeholderTextColor={colors.muted}
+          autoCapitalize="none"
+          style={input}
+        />
+        <TextInput
+          value={studentLoginPass}
+          onChangeText={setStudentLoginPass}
+          placeholder="Student password (min 6 characters)"
+          placeholderTextColor={colors.muted}
+          autoCapitalize="none"
+          secureTextEntry
+          style={input}
+        />
+
+        <Text style={{ color: colors.text, fontWeight: "600", marginTop: space(2) }}>Parent</Text>
+        <TextInput
+          value={parentLoginId}
+          onChangeText={setParentLoginId}
+          placeholder="Parent mobile number or email"
+          placeholderTextColor={colors.muted}
+          autoCapitalize="none"
+          style={input}
+        />
+        <TextInput
+          value={parentLoginPass}
+          onChangeText={setParentLoginPass}
+          placeholder="Parent password (min 6 characters)"
+          placeholderTextColor={colors.muted}
+          autoCapitalize="none"
+          secureTextEntry
+          style={input}
+        />
+      </Card>
+
+      <Card style={{ gap: space(3) }}>
         <Text style={labelStyle}>Documents</Text>
         <DocSlot
-          label="Student ID"
-          image={studentIdDoc}
+          label="Student ID (front)"
+          image={studentIdFront}
           onPick={async () => {
-            const picked = await chooseImage("Student ID");
-            if (picked) setStudentIdDoc(picked);
+            const picked = await chooseImage("Student ID front");
+            if (picked) setStudentIdFront(picked);
           }}
-          onClear={() => setStudentIdDoc(null)}
+          onClear={() => setStudentIdFront(null)}
         />
         <DocSlot
-          label="Parent ID"
-          image={parentIdDoc}
+          label="Student ID (back)"
+          image={studentIdBack}
           onPick={async () => {
-            const picked = await chooseImage("Parent ID");
-            if (picked) setParentIdDoc(picked);
+            const picked = await chooseImage("Student ID back");
+            if (picked) setStudentIdBack(picked);
           }}
-          onClear={() => setParentIdDoc(null)}
+          onClear={() => setStudentIdBack(null)}
+        />
+        <DocSlot
+          label="Parent ID (front)"
+          image={parentIdFront}
+          onPick={async () => {
+            const picked = await chooseImage("Parent ID front");
+            if (picked) setParentIdFront(picked);
+          }}
+          onClear={() => setParentIdFront(null)}
+        />
+        <DocSlot
+          label="Parent ID (back)"
+          image={parentIdBack}
+          onPick={async () => {
+            const picked = await chooseImage("Parent ID back");
+            if (picked) setParentIdBack(picked);
+          }}
+          onClear={() => setParentIdBack(null)}
         />
       </Card>
 
@@ -185,16 +283,21 @@ export default function NewStudent() {
           style={input}
         />
         <Muted>Charged per student, not per room. Picking a room prefills its default rent.</Muted>
-        <View style={styles.switchRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.text, fontWeight: "600" }}>Paid for current month</Text>
-            <Muted>{"Record this month's fee as received now."}</Muted>
-          </View>
-          <Switch
+        <View style={{ gap: 2 }}>
+          <Text style={{ color: colors.text, fontWeight: "600" }}>Paid now (₹)</Text>
+          <TextInput
             value={paidNow}
-            onValueChange={setPaidNow}
-            disabled={fee.trim().length === 0}
+            onChangeText={setPaidNow}
+            placeholder="Leave blank if nothing paid yet"
+            placeholderTextColor={colors.muted}
+            keyboardType="number-pad"
+            editable={fee.trim().length > 0}
+            style={[input, fee.trim().length === 0 && { opacity: 0.5 }]}
           />
+          <Muted>
+            The first month&apos;s fee is added to the due list automatically. Enter any amount
+            collected now — part payments show the remaining balance.
+          </Muted>
         </View>
       </Card>
 
@@ -309,7 +412,6 @@ const inputStyle = {
 
 const styles = StyleSheet.create({
   photoRow: { flexDirection: "row", alignItems: "center", gap: space(3) },
-  switchRow: { flexDirection: "row", alignItems: "center", gap: space(3) },
   docThumb: { width: 72, height: 72, borderRadius: radius.sm },
   docEmpty: { alignItems: "center", justifyContent: "center" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: space(2) },

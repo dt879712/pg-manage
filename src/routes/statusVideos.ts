@@ -34,7 +34,7 @@ async function resolveStudent(req: Request, explicitId?: string) {
 }
 
 /**
- * Record a 15-second check-in/out clip in a single request. The clip arrives as
+ * Record a 6-second check-in/out clip in a single request. The clip arrives as
  * a base64 data URL, is pushed to Cloudinary, then replaces the student's
  * previous clip and writes the matching attendance row.
  */
@@ -251,8 +251,8 @@ async function notifyStakeholders(
   const title = direction === "CHECK_IN" ? `${name} checked in` : `${name} checked out`;
   const body =
     direction === "CHECK_IN"
-      ? `${name} has returned to the PG (15s video).`
-      : `${name} has left the PG (15s video).`;
+      ? `${name} has returned to the PG (6s video).`
+      : `${name} has left the PG (6s video).`;
 
   await prisma.$transaction(async (tx) => {
     const created = await tx.notification.create({

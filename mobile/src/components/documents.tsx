@@ -80,6 +80,7 @@ export function DocumentGallery({
             <Image source={{ uri: d.fileUrl }} style={[styles.thumb, { backgroundColor: colors.cardAlt }]} />
             <Text numberOfLines={1} style={[styles.caption, { color: colors.muted }]}>
               {d.title || d.type}
+              {d.side ? ` · ${d.side}` : ""}
             </Text>
           </Pressable>
         ))}
@@ -115,7 +116,8 @@ export function MyDocumentsCard() {
       await uploadDocument({
         studentId,
         type: "ID_PROOF",
-        title: `ID proof (${side})`,
+        title: "ID proof",
+        side,
         dataUrl: picked.dataUrl,
         mimeType: picked.mimeType,
       });

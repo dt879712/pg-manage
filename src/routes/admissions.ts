@@ -19,6 +19,7 @@ const ownerGuard = [requireAuth, requireTenant, requireRole("OWNER")];
 const documentInput = z.object({
   type: z.enum(["ID_PROOF", "PHOTO", "AGREEMENT", "OTHER"]).default("OTHER"),
   title: z.string().optional(),
+  side: z.enum(["front", "back"]).optional(),
   dataUrl: z.string().min(1),
   mimeType: z.string().optional(),
 });
@@ -36,7 +37,8 @@ const applyBody = z.object({
   note: z.string().optional(),
   guardianName: z.string().optional(),
   guardianPhone: z.string().optional(),
-  guardianEmail: z.string().optional(),
+  guardianEmail: z.string().email().optional(),
+  guardianPassword: z.string().min(6).optional(),
   password: z.string().min(6),
   documents: z.array(documentInput).min(1),
 });
@@ -92,6 +94,34 @@ admissionsRouter.post("/", async (req, res, next) => {
       res.status(409).json({ error: "An account with this email already exists" });
       return;
     }
+
+    // Each account needs its own unique mobile number so a number resolves to
+    // exactly one login. The student's own number and the guardian's number
+    // (when given) must both be free.
+    const phone = body.phone.trim();
+    const guardianPhone = body.guardianPhone?.trim();
+    const phoneClash = await prisma.user.findFirst({
+      where: { OR: [{ phone }, ...(guardianPhone ? [{ phone: guardianPhone }] : [])] },
+    });
+    if (phoneClash) {
+      res.status(409).json({
+        error: `Mobile number ${phoneClash.phone} is already used by another account. Every account needs its own mobile number.`,
+      });
+      return;
+    }
+    if (guardianPhone && guardianPhone === phone) {
+      res.status(400).json({ error: "The guardian needs a different mobile number from the student." });
+      return;
+    }
+    const guardianEmail = body.guardianEmail?.trim().toLowerCase();
+    if (guardianEmail) {
+      const emailClash = await prisma.user.findUnique({ where: { email: guardianEmail } });
+      if (emailClash) {
+        res.status(409).json({ error: `Email ${guardianEmail} is already used by another account.` });
+        return;
+      }
+    }
+
     const pending = await prisma.admissionRequest.findFirst({
       where: { tenantId: tenant.id, email, status: "PENDING" },
       select: { id: true },
@@ -102,6 +132,9 @@ admissionsRouter.post("/", async (req, res, next) => {
     }
 
     const passwordHash = await hashPassword(body.password);
+    const guardianPasswordHash = body.guardianPassword
+      ? await hashPassword(body.guardianPassword)
+      : null;
 
     let storedDocuments;
     try {
@@ -111,7 +144,7 @@ admissionsRouter.post("/", async (req, res, next) => {
             kind: "image",
             folder: "admissions",
           });
-          return { type: d.type, title: d.title, fileUrl: result.fileUrl, mimeType: result.mimeType };
+          return { type: d.type, title: d.title, side: d.side, fileUrl: result.fileUrl, mimeType: result.mimeType };
         })
       );
     } catch (err) {
@@ -151,6 +184,7 @@ admissionsRouter.post("/", async (req, res, next) => {
           guardianName: body.guardianName,
           guardianPhone: body.guardianPhone,
           guardianEmail: body.guardianEmail,
+          guardianPasswordHash,
           passwordHash,
           userId: user.id,
         },
@@ -161,6 +195,7 @@ admissionsRouter.post("/", async (req, res, next) => {
           admissionRequestId: created.id,
           type: d.type,
           title: d.title,
+          side: d.side,
           fileUrl: d.fileUrl,
           mimeType: d.mimeType,
         })),
@@ -279,6 +314,7 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
         bedId: z.string().optional(),
         monthlyFee: z.number().int().nonnegative().optional(),
         paidForCurrentMonth: z.boolean().optional(),
+        paidAmount: z.number().int().positive().optional(),
       })
       .parse(req.body ?? {});
 
@@ -388,10 +424,17 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
           meta: { studentId: created.id, roomId, bedId, pgId: tenantId, fromPgId: request.tenantId },
         },
       });
-      await ensureGuardianParent(tx, tenantId, created, request.passwordHash);
+      await ensureGuardianParent(tx, tenantId, created, request.guardianPasswordHash);
       const amount = body.monthlyFee ?? 0;
-      if (body.paidForCurrentMonth && amount > 0) {
-        const now = new Date();
+      const now = new Date();
+      if (amount > 0) {
+        // First month's fee goes on the books on approval. Amount collected at
+        // admission is recorded as a payment; status (PAID / PARTIAL / PENDING)
+        // is derived from it so part payments show the right balance due.
+        const paid = body.paidForCurrentMonth
+          ? Math.min(Math.max(body.paidAmount ?? amount, 0), amount)
+          : 0;
+        const status = paid >= amount ? "PAID" : paid > 0 ? "PARTIAL" : "PENDING";
         const invoice = await tx.invoice.create({
           data: {
             tenantId,
@@ -400,21 +443,23 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
             amount,
             periodMonth: now.getMonth() + 1,
             periodYear: now.getFullYear(),
-            status: "PAID",
+            status,
             dueDate: now,
           },
         });
-        await tx.payment.create({
-          data: {
-            tenantId,
-            studentId: created.id,
-            invoiceId: invoice.id,
-            amount,
-            method: "CASH",
-            note: "Paid on admission",
-            recordedById: req.user!.sub,
-          },
-        });
+        if (paid > 0) {
+          await tx.payment.create({
+            data: {
+              tenantId,
+              studentId: created.id,
+              invoiceId: invoice.id,
+              amount: paid,
+              method: "CASH",
+              note: paid >= amount ? "Paid on admission" : "Part payment on admission",
+              recordedById: req.user!.sub,
+            },
+          });
+        }
       }
       return created;
     });

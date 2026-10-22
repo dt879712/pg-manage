@@ -24,6 +24,7 @@ export interface Room {
   floor?: number | null;
   capacity: number;
   status: string;
+  gender?: string | null;
   rentAmount?: number | null;
   beds?: Bed[];
   _count?: { students: number };
@@ -156,6 +157,7 @@ export interface DocumentFile {
   id: string;
   type: string;
   title?: string | null;
+  side?: string | null;
   fileUrl: string;
   mimeType?: string | null;
   createdAt: string;

@@ -17,7 +17,7 @@ import {
 import { radius, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 
-const MAX_SECONDS = 15;
+const MAX_SECONDS = 6;
 
 type Stage = "idle" | "recording" | "uploading" | "done";
 
@@ -100,7 +100,7 @@ export default function RecordStatusVideo() {
       <View style={{ flex: 1, backgroundColor: colors.bg, padding: space(4), gap: space(3) }}>
         <Card style={{ gap: space(3) }}>
           <Text style={{ fontWeight: "700", color: colors.text, fontSize: 16 }}>
-            Record a 15-second video
+            Record a {MAX_SECONDS}-second video
           </Text>
           <Muted>Choose whether you are leaving or returning to the PG.</Muted>
           <Row style={{ gap: space(3) }}>
@@ -126,7 +126,7 @@ export default function RecordStatusVideo() {
       <View style={{ flex: 1, backgroundColor: colors.bg, padding: space(4), gap: space(3) }}>
         <Card style={{ gap: space(2) }}>
           <Text style={{ fontWeight: "700", color: colors.text }}>Recording needs the mobile app</Text>
-          <Muted>Open Dev Hostel on your phone to record the 15-second check-in/out video.</Muted>
+          <Muted>Open Dev Hostel on your phone to record the {MAX_SECONDS}-second check-in/out video.</Muted>
         </Card>
         <Button label="Go back" variant="ghost" onPress={() => router.back()} />
       </View>
@@ -146,7 +146,7 @@ export default function RecordStatusVideo() {
       <View style={{ flex: 1, backgroundColor: colors.bg, padding: space(4), gap: space(3) }}>
         <Card style={{ gap: space(2) }}>
           <Text style={{ fontWeight: "700", color: colors.text }}>Camera permission needed</Text>
-          <Muted>Allow camera access to record the 15-second check-in/out video.</Muted>
+          <Muted>Allow camera access to record the {MAX_SECONDS}-second check-in/out video.</Muted>
         </Card>
         <Button label="Grant camera access" icon="camera-outline" onPress={() => requestCam()} />
       </View>
@@ -179,7 +179,7 @@ export default function RecordStatusVideo() {
       <View style={[styles.controls, { backgroundColor: colors.bg }]}>
         <ErrorText>{error}</ErrorText>
         <Text style={{ color: colors.text, fontWeight: "700", fontSize: 16, textAlign: "center" }}>
-          {dirLabel} · 15s live video
+          {dirLabel} · {MAX_SECONDS}s live video
         </Text>
         {params.room ? <Muted style={{ textAlign: "center" }}>Room {params.room}</Muted> : null}
 
@@ -219,7 +219,7 @@ export default function RecordStatusVideo() {
 
         {stage === "idle" ? (
           <Muted style={{ textAlign: "center", marginTop: space(3), fontSize: 12 }}>
-            A 15-second clip is recorded and kept until the next check-in/out.
+            A {MAX_SECONDS}-second clip is recorded and kept until the next check-in/out.
           </Muted>
         ) : null}
       </View>

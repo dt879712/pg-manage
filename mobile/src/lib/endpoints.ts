@@ -42,6 +42,20 @@ export function addBed(roomId: string, label: string) {
   return api<{ bed: Bed }>(`/rooms/${roomId}/beds`, { method: "POST", body: { label } });
 }
 
+export function updateRoom(
+  id: string,
+  input: {
+    roomNumber?: string;
+    floor?: number | null;
+    capacity?: number;
+    gender?: string | null;
+    status?: "ACTIVE" | "MAINTENANCE" | "INACTIVE";
+    rentAmount?: number | null;
+  }
+) {
+  return api<{ room: Room }>(`/rooms/${id}`, { method: "PATCH", body: input });
+}
+
 export function deleteRoom(id: string) {
   return api<{ ok: boolean }>(`/rooms/${id}`, { method: "DELETE" });
 }
@@ -61,7 +75,7 @@ export function resetUserPassword(userId: string, password?: string) {
 }
 
 export function forgotPassword(email: string) {
-  return api<{ ok: boolean; needsEmail: boolean; devLink?: string | null }>("/auth/forgot-password", {
+  return api<{ ok: boolean; needsEmail: boolean }>("/auth/forgot-password", {
     method: "POST",
     body: { email },
     auth: false,
@@ -105,9 +119,17 @@ export interface CreateStudentInput {
   guardianEmail?: string;
   monthlyFee?: number;
   paidForCurrentMonth?: boolean;
+  paidAmount?: number;
   photoUrl?: string;
   roomId?: string;
   bedId?: string;
+  joinDate?: string;
+  studentEmail?: string;
+  studentPhone?: string;
+  studentPassword?: string;
+  parentEmail?: string;
+  parentPhone?: string;
+  parentPassword?: string;
 }
 
 export function createStudent(input: CreateStudentInput) {
@@ -123,6 +145,7 @@ export function uploadDocument(input: {
   userId?: string;
   type?: string;
   title?: string;
+  side?: "front" | "back";
   dataUrl: string;
   mimeType?: string;
 }) {
@@ -198,6 +221,7 @@ export function getPublicPg() {
 export interface AdmissionDocumentInput {
   type: string;
   title?: string;
+  side?: "front" | "back";
   dataUrl: string;
   mimeType?: string;
 }
@@ -216,6 +240,7 @@ export interface ApplyAdmissionInput {
   guardianName?: string;
   guardianPhone?: string;
   guardianEmail?: string;
+  guardianPassword?: string;
   password: string;
   documents: AdmissionDocumentInput[];
 }
@@ -253,6 +278,7 @@ export function approveAdmission(
     bedId?: string;
     monthlyFee?: number;
     paidForCurrentMonth?: boolean;
+    paidAmount?: number;
   }
 ) {
   return api<{ ok: boolean; studentId: string }>(`/admissions/${id}/approve`, {

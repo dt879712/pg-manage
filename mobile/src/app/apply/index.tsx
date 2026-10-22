@@ -36,9 +36,13 @@ export default function Apply() {
   const [college, setCollege] = useState("");
   const [guardianName, setGuardianName] = useState("");
   const [guardianPhone, setGuardianPhone] = useState("");
+  const [guardianEmail, setGuardianEmail] = useState("");
+  const [guardianPassword, setGuardianPassword] = useState("");
   const [photo, setPhoto] = useState<PickedImage | null>(null);
-  const [studentIdDoc, setStudentIdDoc] = useState<PickedImage | null>(null);
-  const [parentIdDoc, setParentIdDoc] = useState<PickedImage | null>(null);
+  const [studentIdFront, setStudentIdFront] = useState<PickedImage | null>(null);
+  const [studentIdBack, setStudentIdBack] = useState<PickedImage | null>(null);
+  const [parentIdFront, setParentIdFront] = useState<PickedImage | null>(null);
+  const [parentIdBack, setParentIdBack] = useState<PickedImage | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -60,9 +64,11 @@ export default function Apply() {
     if (!/^[\d\s+()-]{7,}$/.test(phone.trim())) return setErr("Please enter a valid phone number.");
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return setErr("Please enter a valid email address.");
     if (password.length < 6) return setErr("Password must be at least 6 characters.");
-    if (!studentIdDoc) return setErr("Please add the student ID document.");
+    if (!studentIdFront) return setErr("Please add the student ID document (front).");
+    if (!studentIdBack) return setErr("Please add the student ID document (back).");
     if (!photo) return setErr("Please add your photo.");
-    if (!parentIdDoc) return setErr("Please add the parent / guardian ID document.");
+    if (!parentIdFront) return setErr("Please add the parent / guardian ID document (front).");
+    if (!parentIdBack) return setErr("Please add the parent / guardian ID document (back).");
 
     const payload: ApplyAdmissionInput = {
       firstName: firstName.trim(),
@@ -75,11 +81,15 @@ export default function Apply() {
       college: college.trim() || undefined,
       guardianName: guardianName.trim() || undefined,
       guardianPhone: guardianPhone.trim() || undefined,
+      guardianEmail: guardianEmail.trim() || undefined,
+      guardianPassword: guardianPassword.trim() || undefined,
       password,
       documents: [
-        { type: "ID_PROOF", title: "Student ID", dataUrl: studentIdDoc.dataUrl, mimeType: studentIdDoc.mimeType },
+        { type: "ID_PROOF", title: "Student ID", side: "front", dataUrl: studentIdFront.dataUrl, mimeType: studentIdFront.mimeType },
+        { type: "ID_PROOF", title: "Student ID", side: "back", dataUrl: studentIdBack.dataUrl, mimeType: studentIdBack.mimeType },
         { type: "PHOTO", title: "Student photo", dataUrl: photo.dataUrl, mimeType: photo.mimeType },
-        { type: "ID_PROOF", title: "Parent ID", dataUrl: parentIdDoc.dataUrl, mimeType: parentIdDoc.mimeType },
+        { type: "ID_PROOF", title: "Parent ID", side: "front", dataUrl: parentIdFront.dataUrl, mimeType: parentIdFront.mimeType },
+        { type: "ID_PROOF", title: "Parent ID", side: "back", dataUrl: parentIdBack.dataUrl, mimeType: parentIdBack.mimeType },
       ],
     };
 
@@ -192,6 +202,27 @@ export default function Apply() {
           <Card style={{ gap: space(3), marginTop: space(2) }}>
             <TextInput value={guardianName} onChangeText={setGuardianName} placeholder="Guardian name" placeholderTextColor={colors.muted} style={input} />
             <TextInput value={guardianPhone} onChangeText={setGuardianPhone} placeholder="Guardian phone" placeholderTextColor={colors.muted} keyboardType="phone-pad" style={input} />
+            <TextInput
+              value={guardianEmail}
+              onChangeText={setGuardianEmail}
+              placeholder="Guardian email"
+              placeholderTextColor={colors.muted}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              style={input}
+            />
+            <TextInput
+              value={guardianPassword}
+              onChangeText={setGuardianPassword}
+              placeholder="Guardian password (min 6 characters)"
+              placeholderTextColor={colors.muted}
+              autoCapitalize="none"
+              secureTextEntry
+              style={input}
+            />
+            <Muted style={{ fontSize: 12 }}>
+              The guardian signs in with their own mobile number or email and this password.
+            </Muted>
           </Card>
         </View>
 
@@ -199,13 +230,22 @@ export default function Apply() {
           <SectionTitle>Required documents</SectionTitle>
           <Card style={{ gap: space(3), marginTop: space(2) }}>
             <DocSlot
-              label="Student ID (Aadhaar / ID card) *"
-              image={studentIdDoc}
+              label="Student ID (front) *"
+              image={studentIdFront}
               onPick={async () => {
-                const picked = await chooseImage("Student ID");
-                if (picked) setStudentIdDoc(picked);
+                const picked = await chooseImage("Student ID front");
+                if (picked) setStudentIdFront(picked);
               }}
-              onClear={() => setStudentIdDoc(null)}
+              onClear={() => setStudentIdFront(null)}
+            />
+            <DocSlot
+              label="Student ID (back) *"
+              image={studentIdBack}
+              onPick={async () => {
+                const picked = await chooseImage("Student ID back");
+                if (picked) setStudentIdBack(picked);
+              }}
+              onClear={() => setStudentIdBack(null)}
             />
             <DocSlot
               label="Student photo *"
@@ -217,13 +257,22 @@ export default function Apply() {
               onClear={() => setPhoto(null)}
             />
             <DocSlot
-              label="Parent / guardian ID *"
-              image={parentIdDoc}
+              label="Parent / guardian ID (front) *"
+              image={parentIdFront}
               onPick={async () => {
-                const picked = await chooseImage("Parent ID");
-                if (picked) setParentIdDoc(picked);
+                const picked = await chooseImage("Parent ID front");
+                if (picked) setParentIdFront(picked);
               }}
-              onClear={() => setParentIdDoc(null)}
+              onClear={() => setParentIdFront(null)}
+            />
+            <DocSlot
+              label="Parent / guardian ID (back) *"
+              image={parentIdBack}
+              onPick={async () => {
+                const picked = await chooseImage("Parent ID back");
+                if (picked) setParentIdBack(picked);
+              }}
+              onClear={() => setParentIdBack(null)}
             />
           </Card>
         </View>

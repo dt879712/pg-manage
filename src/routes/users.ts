@@ -6,7 +6,7 @@ import { generateTempPassword } from "../lib/password";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { requireTenant } from "../middleware/tenant";
 import { storeMaybeDataUrl, resolveOptionalUrl, resolveMediaUrl } from "../lib/fileStore";
-import { ensureGuardianParent, syncStudentPasswordToParents } from "../lib/guardian";
+import { ensureGuardianParent } from "../lib/guardian";
 
 export const usersRouter = Router();
 
@@ -231,7 +231,7 @@ usersRouter.post("/students", async (req, res, next) => {
         },
       });
       await tx.student.update({ where: { id: student.id }, data: { userId: created.id } });
-      await ensureGuardianParent(tx, tenantId, student, passwordHash);
+      await ensureGuardianParent(tx, tenantId, student);
       return created;
     });
 
@@ -264,16 +264,7 @@ usersRouter.post("/:id/reset-password", async (req, res, next) => {
     const body = z.object({ newPassword: z.string().min(6).optional() }).parse(req.body ?? {});
     const password = body.newPassword ?? generateTempPassword();
     const passwordHash = await hashPassword(password);
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: existing.id }, data: { passwordHash } });
-      if (existing.role === "STUDENT") {
-        const student = await tx.student.findFirst({
-          where: { userId: existing.id, tenantId },
-          select: { id: true },
-        });
-        if (student) await syncStudentPasswordToParents(tx, student.id, passwordHash);
-      }
-    });
+    await prisma.user.update({ where: { id: existing.id }, data: { passwordHash } });
     await prisma.auditLog.create({
       data: {
         tenantId,

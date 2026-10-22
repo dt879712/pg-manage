@@ -13,7 +13,7 @@ import { DesktopShell } from "@/components/shell";
 import { TopBar } from "@/components/topbar";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { addBed, createRoom, deleteRoom } from "@/lib/endpoints";
+import { addBed, createRoom, deleteRoom, updateRoom } from "@/lib/endpoints";
 import { money } from "@/lib/format";
 import { space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
@@ -39,6 +39,7 @@ function RoomsView() {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState<Room | null>(null);
 
   const setStatus = async (room: Room, status: "ACTIVE" | "MAINTENANCE") => {
     setBusy(room.id);
@@ -60,6 +61,10 @@ function RoomsView() {
       undefined,
       [
         { text: "Cancel", style: "cancel" },
+        {
+          text: "Edit room",
+          onPress: () => setEditing(room),
+        },
         {
           text: "Add bed",
           onPress: () => {
@@ -186,6 +191,17 @@ function RoomsView() {
           }}
         />
       ) : null}
+
+      {editing ? (
+        <EditRoomModal
+          room={editing}
+          onClose={() => setEditing(null)}
+          onDone={async () => {
+            setEditing(null);
+            reload();
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -303,6 +319,113 @@ export default function Rooms() {
     <DesktopShell>
       <RoomsView />
     </DesktopShell>
+  );
+}
+
+function EditRoomModal({
+  room,
+  onClose,
+  onDone,
+}: {
+  room: Room;
+  onClose: () => void;
+  onDone: () => Promise<void>;
+}) {
+  const { colors } = useTheme();
+  const [roomNumber, setRoomNumber] = useState(room.roomNumber);
+  const [floor, setFloor] = useState(room.floor != null ? String(room.floor) : "");
+  const [capacity, setCapacity] = useState(room.capacity ? String(room.capacity) : "");
+  const [gender, setGender] = useState<string | null>(room.gender ?? null);
+  const [rent, setRent] = useState(room.rentAmount != null ? String(room.rentAmount) : "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const occupied = (room.beds ?? []).filter((b) => b.status === "OCCUPIED").length;
+
+  const submit = async () => {
+    if (!roomNumber.trim()) {
+      setErr("Room number is required.");
+      return;
+    }
+    const cap = capacity ? Math.max(1, parseInt(capacity, 10)) : undefined;
+    if (cap != null && cap < occupied) {
+      setErr(`Capacity cannot be less than the ${occupied} occupied bed(s).`);
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      await updateRoom(room.id, {
+        roomNumber: roomNumber.trim(),
+        floor: floor.trim() ? parseInt(floor, 10) : null,
+        capacity: cap,
+        gender: gender ?? null,
+        rentAmount: rent.trim() ? Math.max(0, parseInt(rent, 10)) : null,
+      });
+      await onDone();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to update room");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal visible animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <TopBar />
+        <ScrollView
+          style={{ flex: 1, backgroundColor: colors.bg }}
+          contentContainerStyle={{ padding: space(4), gap: space(3) }}
+        >
+          <Text style={{ fontWeight: "700", fontSize: 18, color: colors.text }}>
+            Edit Room {room.roomNumber}
+          </Text>
+          <Field label="Room number" value={roomNumber} onChangeText={setRoomNumber} placeholder="e.g. 102" />
+          <Field label="Floor" value={floor} onChangeText={setFloor} placeholder="e.g. 1" keyboardType="number-pad" />
+          <View style={{ gap: 2 }}>
+            <Field
+              label="Capacity"
+              value={capacity}
+              onChangeText={setCapacity}
+              placeholder="e.g. 2"
+              keyboardType="number-pad"
+            />
+            {occupied > 0 ? <Muted style={{ fontSize: 12 }}>{occupied} bed(s) occupied.</Muted> : null}
+          </View>
+          <View style={{ gap: space(2) }}>
+            <Muted>Gender</Muted>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space(2) }}>
+              {["MALE", "FEMALE", "OTHER"].map((g) => (
+                <Pressable
+                  key={g}
+                  onPress={() => setGender(gender === g ? null : g)}
+                  style={[
+                    {
+                      paddingHorizontal: space(3),
+                      paddingVertical: space(2),
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: gender === g ? colors.primary : colors.border,
+                      backgroundColor: gender === g ? colors.primarySoft : colors.card,
+                    },
+                  ]}
+                >
+                  <Text style={{ color: gender === g ? colors.primary : colors.muted }}>{g}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+          <Field label="Default rent / month (₹, optional)" value={rent} onChangeText={setRent} keyboardType="number-pad" placeholder="e.g. 7000" />
+          <Muted style={{ fontSize: 12 }}>Used only to prefill a student&apos;s fee. Fees are charged per student.</Muted>
+          <ErrorText>{err}</ErrorText>
+          <Row style={{ gap: space(3) }}>
+            <Button label="Cancel" variant="ghost" onPress={onClose} disabled={busy} />
+            <Button label="Save changes" loading={busy} onPress={submit} />
+          </Row>
+        </ScrollView>
+      </View>
+    </Modal>
   );
 }
 

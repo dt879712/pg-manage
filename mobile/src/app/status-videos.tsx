@@ -60,7 +60,7 @@ function VideosView() {
           ) : null}
         </Row>
         <Muted style={{ fontSize: 12 }}>
-          The latest 15-second check-in/out clip for each student is kept. The previous clip is deleted automatically.
+          The latest 6-second check-in/out clip for each student is kept. The previous clip is deleted automatically.
         </Muted>
         {isStaff ? (
           <TextInput
