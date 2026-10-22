@@ -41,9 +41,45 @@ roomsRouter.get("/", requireRole("OWNER", "STAFF"), async (req, res, next) => {
     const rooms = await prisma.room.findMany({
       where: { tenantId, ...(propertyId ? { propertyId } : {}) },
       orderBy: { roomNumber: "asc" },
-      include: { beds: { orderBy: { label: "asc" } }, _count: { select: { students: true } } },
+      include: {
+        beds: {
+          orderBy: { label: "asc" },
+          include: {
+            // Occupancy is derived from the students actually assigned, so the
+            // bed list can never disagree with who is really in the room.
+            students: {
+              where: { status: "ACTIVE" },
+              select: { id: true, firstName: true, lastName: true },
+            },
+          },
+        },
+        _count: { select: { students: true } },
+      },
     });
-    res.json({ rooms });
+
+    // Reconcile the stored bed status with real occupancy so a bed freed by a
+    // student leaving is immediately re-allottable, and a bed with an active
+    // student can't be handed to someone else.
+    const fixes: { id: string; status: "OCCUPIED" | "VACANT" }[] = [];
+    const shaped = rooms.map((room) => ({
+      ...room,
+      beds: room.beds.map((bed) => {
+        const occupiedId = bed.students[0]?.id ?? null;
+        const status = occupiedId ? "OCCUPIED" : bed.status === "MAINTENANCE" ? "MAINTENANCE" : "VACANT";
+        if (status !== bed.status && bed.status !== "MAINTENANCE") {
+          fixes.push({ id: bed.id, status: status as "OCCUPIED" | "VACANT" });
+        }
+        const { students, ...rest } = bed;
+        return { ...rest, status, occupiedBy: students[0] ? { id: students[0].id, name: [students[0].firstName, students[0].lastName].filter(Boolean).join(" ") } : null };
+      }),
+    }));
+    if (fixes.length) {
+      await prisma.$transaction(
+        fixes.map((f) => prisma.bed.update({ where: { id: f.id }, data: { status: f.status } }))
+      );
+    }
+
+    res.json({ rooms: shaped });
   } catch (err) {
     next(err);
   }

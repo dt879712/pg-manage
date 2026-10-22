@@ -154,12 +154,38 @@ function RoomsView() {
                     </Muted>
                     {beds.length > 0 ? (
                       <Text numberOfLines={1} style={{ fontSize: 12, color: colors.muted }}>
-                        {beds.map((b) => `${b.label}${b.status === "OCCUPIED" ? "●" : ""}`).join("  ")}
+                        {beds
+                          .map((b) => `${b.label}${b.status === "OCCUPIED" ? "●" : ""}${b.occupiedBy ? ` ${b.occupiedBy.name}` : ""}`)
+                          .join("  ")}
                       </Text>
                     ) : null}
                   </View>
                   <Badge label={room.status} tone={statusTone(room.status)} />
-                  {room.status === "ACTIVE" ? (
+                  {isOwner ? (
+                    <View style={{ alignItems: "flex-end", gap: space(2) }}>
+                      <Button
+                        label="Edit"
+                        variant="ghost"
+                        icon="create-outline"
+                        onPress={() => setEditing(room)}
+                      />
+                      {room.status === "ACTIVE" ? (
+                        <Button
+                          label="Maintenance"
+                          variant="ghost"
+                          loading={busy === room.id}
+                          onPress={() => setStatus(room, "MAINTENANCE")}
+                        />
+                      ) : (
+                        <Button
+                          label="Set active"
+                          variant="success"
+                          loading={busy === room.id}
+                          onPress={() => setStatus(room, "ACTIVE")}
+                        />
+                      )}
+                    </View>
+                  ) : room.status === "ACTIVE" ? (
                     <Button
                       label="Maintenance"
                       variant="ghost"

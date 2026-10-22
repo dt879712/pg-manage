@@ -35,6 +35,7 @@ export interface Bed {
   label: string;
   status: string;
   roomId: string;
+  occupiedBy?: { id: string; name: string } | null;
 }
 
 export interface Student {

@@ -54,6 +54,7 @@ async function resolvePlacement(
   if (bedId) {
     const bed = await prisma.bed.findFirst({ where: { id: bedId, tenantId } });
     if (!bed) return { error: "Invalid bed" };
+    if (bed.status === "MAINTENANCE") return { error: "That bed is under maintenance" };
     const occupant = await prisma.student.findFirst({
       where: {
         bedId: bed.id,
@@ -352,14 +353,23 @@ studentsRouter.patch("/:id", async (req, res, next) => {
     }
 
     const body = studentBody.partial().parse(req.body);
-    const placement = await resolvePlacement(tenantId, body.roomId, body.bedId, existing.id);
+    // Only touch the placement when the caller actually sends room/bed fields;
+    // otherwise keep the student where they are.
+    const placement =
+      body.roomId !== undefined || body.bedId !== undefined
+        ? await resolvePlacement(tenantId, body.roomId, body.bedId, existing.id)
+        : { roomId: existing.roomId, bedId: existing.bedId };
+    if ("error" in placement) {
+      res.status(400).json({ error: placement.error });
+      return;
+    }
     const photoUrl = await storeMaybeDataUrl(tenantId, body.photoUrl, {
       kind: "image",
       folder: "students",
     });
 
     const student = await prisma.$transaction(async (tx) => {
-      if (!("error" in placement) && placement.bedId !== existing.bedId) {
+      if (placement.bedId !== existing.bedId) {
         if (existing.bedId) {
           await tx.bed.update({ where: { id: existing.bedId }, data: { status: "VACANT" } });
         }
@@ -370,7 +380,8 @@ studentsRouter.patch("/:id", async (req, res, next) => {
       return tx.student.update({
         where: { id: existing.id },
         data: {
-          ...("error" in placement ? {} : { roomId: placement.roomId, bedId: placement.bedId }),
+          roomId: placement.roomId,
+          bedId: placement.bedId,
           firstName: body.firstName,
           lastName: body.lastName,
           gender: body.gender,
