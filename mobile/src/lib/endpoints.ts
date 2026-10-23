@@ -5,6 +5,7 @@ import type {
   AppNotification,
   Bed,
   DocumentFile,
+  Invoice,
   Leave,
   LeaveTarget,
   ManagedUser,
@@ -30,10 +31,10 @@ export function createRoom(input: {
   propertyId: string;
   roomNumber: string;
   floor?: number;
-  capacity?: number;
   gender?: string;
   rentAmount?: number;
-  bedCount?: number;
+  capacity?: number;
+  beds?: string[];
 }) {
   return api<{ room: Room }>("/rooms", { method: "POST", body: input });
 }
@@ -42,15 +43,23 @@ export function addBed(roomId: string, label: string) {
   return api<{ bed: Bed }>(`/rooms/${roomId}/beds`, { method: "POST", body: { label } });
 }
 
+export function updateBed(id: string, input: { label?: string; status?: "VACANT" | "MAINTENANCE" }) {
+  return api<{ bed: Bed }>(`/beds/${id}`, { method: "PATCH", body: input });
+}
+
+export function deleteBed(id: string) {
+  return api<{ ok: boolean }>(`/beds/${id}`, { method: "DELETE" });
+}
+
 export function updateRoom(
   id: string,
   input: {
     roomNumber?: string;
     floor?: number | null;
-    capacity?: number;
     gender?: string | null;
     status?: "ACTIVE" | "MAINTENANCE" | "INACTIVE";
     rentAmount?: number | null;
+    capacity?: number;
   }
 ) {
   return api<{ room: Room }>(`/rooms/${id}`, { method: "PATCH", body: input });
@@ -109,10 +118,15 @@ export function updateUser(id: string, body: Record<string, unknown>) {
   return api<{ user: UserDetail }>(`/users/${id}`, { method: "PATCH", body });
 }
 
+export function deleteUser(id: string) {
+  return api<{ ok: boolean }>(`/users/${id}`, { method: "DELETE" });
+}
+
 export interface CreateStudentInput {
   firstName: string;
   lastName?: string;
   phone?: string;
+  dob?: string;
   address?: string;
   guardianName?: string;
   guardianPhone?: string;
@@ -402,4 +416,15 @@ export function createPayment(input: {
     studentNotified: number;
     outstanding: number;
   }>("/payments", { method: "POST", body: input });
+}
+
+export function addInvoiceItem(invoiceId: string, input: { label: string; amount: number }) {
+  return api<{ invoice: Invoice }>(`/invoices/${invoiceId}/items`, {
+    method: "POST",
+    body: input,
+  });
+}
+
+export function deleteInvoiceItem(invoiceId: string, index: number) {
+  return api<{ invoice: Invoice }>(`/invoices/${invoiceId}/items/${index}`, { method: "DELETE" });
 }

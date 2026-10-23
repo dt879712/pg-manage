@@ -112,9 +112,10 @@ export interface Attendance {
 export interface Invoice {
   id: string;
   studentId: string;
-  title: string;
-  amount: number;
-  status: string;
+    title: string;
+    amount: number;
+    items?: { label: string; amount: number }[] | null;
+    status: string;
   periodMonth?: number | null;
   periodYear?: number | null;
   dueDate?: string | null;

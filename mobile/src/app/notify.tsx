@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Button, Card, ErrorText, Muted } from "@/components/ui";
+import { notify as showMessage } from "@/lib/dialog";
 import { broadcastNotification } from "@/lib/endpoints";
 import { radius, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
@@ -44,7 +45,7 @@ export default function NotifyScreen() {
       const r = await broadcastNotification({ title: title.trim(), body: body.trim(), audiences });
       setTitle("");
       setBody("");
-      Alert.alert("Sent", `Delivered to ${r.recipients} ${r.recipients === 1 ? "person" : "people"}.`);
+      showMessage("Sent", `Delivered to ${r.recipients} ${r.recipients === 1 ? "person" : "people"}.`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed");
     } finally {

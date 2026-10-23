@@ -290,6 +290,7 @@ function AdmissionDetail({
                     {rooms.map((r) => (
                       <Pressable
                         key={r.id}
+                        disabled={r.status !== "ACTIVE"}
                         onPress={() => {
                           setRoomId(r.id);
                           setBedId(null);
@@ -298,11 +299,12 @@ function AdmissionDetail({
                         style={[
                           chipStyle,
                           { borderColor: colors.border, backgroundColor: colors.bg },
+                          r.status !== "ACTIVE" && { opacity: 0.4 },
                           roomId === r.id && { backgroundColor: colors.primarySolid, borderColor: colors.primarySolid },
                         ]}
                       >
                         <Text style={{ color: roomId === r.id ? colors.onPrimary : colors.text, fontWeight: "600" }}>
-                          Room {r.roomNumber}
+                          Room {r.roomNumber}{r.status !== "ACTIVE" ? " (unavailable)" : ""}
                         </Text>
                       </Pressable>
                     ))}
@@ -311,7 +313,7 @@ function AdmissionDetail({
                   {selectedRoom ? (
                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space(2) }}>
                       {beds.map((b) => {
-                        const disabled = b.status === "OCCUPIED";
+                        const disabled = b.status !== "VACANT";
                         return (
                           <Pressable
                             key={b.id}

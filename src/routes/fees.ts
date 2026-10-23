@@ -141,6 +141,102 @@ invoicesRouter.delete("/:id", requireRole("OWNER"), async (req, res, next) => {
   }
 });
 
+type InvoiceItem = { label: string; amount: number };
+
+function readItems(value: Prisma.JsonValue | null | undefined): InvoiceItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(
+      (i): i is { label: string; amount: number } =>
+        typeof i === "object" &&
+        i !== null &&
+        typeof (i as InvoiceItem).label === "string" &&
+        typeof (i as InvoiceItem).amount === "number"
+    )
+    .map((i) => ({ label: i.label, amount: Math.round(i.amount) }));
+}
+
+// Add an extra charge (e.g. an electricity bill) to an existing invoice. The
+// invoice total grows by the same amount so dues, payments and receipts stay
+// consistent, and the charge prints as its own line on the receipt.
+invoicesRouter.post("/:id/items", requireRole("OWNER"), async (req, res, next) => {
+  try {
+    const tenantId = req.user!.tenantId!;
+    const body = z
+      .object({
+        label: z.string().trim().min(1).max(80),
+        amount: z.number().int().positive().max(100_000_000),
+      })
+      .parse(req.body);
+
+    const existing = await prisma.invoice.findFirst({
+      where: { id: (req.params.id as string), tenantId },
+      include: { payments: { select: { amount: true } } },
+    });
+    if (!existing) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    if (existing.status === "CANCELLED") {
+      res.status(400).json({ error: "This bill is cancelled" });
+      return;
+    }
+
+    const items = [...readItems(existing.items), { label: body.label, amount: body.amount }];
+    const amount = existing.amount + body.amount;
+    const paid = existing.payments.reduce((sum, p) => sum + p.amount, 0);
+    const status = paid >= amount ? "PAID" : paid > 0 ? "PARTIAL" : "PENDING";
+
+    const invoice = await prisma.invoice.update({
+      where: { id: existing.id },
+      data: { items: items as Prisma.InputJsonValue, amount, status },
+    });
+    res.status(201).json({ invoice });
+  } catch (err) {
+    next(err);
+  }
+});
+
+invoicesRouter.delete("/:id/items/:index", requireRole("OWNER"), async (req, res, next) => {
+  try {
+    const tenantId = req.user!.tenantId!;
+    const index = Number.parseInt(req.params.index as string, 10);
+    const existing = await prisma.invoice.findFirst({
+      where: { id: (req.params.id as string), tenantId },
+      include: { payments: { select: { amount: true } } },
+    });
+    if (!existing) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const items = readItems(existing.items);
+    if (!Number.isInteger(index) || index < 0 || index >= items.length) {
+      res.status(400).json({ error: "Invalid bill" });
+      return;
+    }
+    const removed = items[index];
+    const nextItems = items.filter((_, i) => i !== index);
+    const amount = existing.amount - removed.amount;
+    const paid = existing.payments.reduce((sum, p) => sum + p.amount, 0);
+    if (paid > amount) {
+      res.status(400).json({ error: "Payments already cover this bill — reverse the payment first" });
+      return;
+    }
+    const status = paid >= amount ? "PAID" : paid > 0 ? "PARTIAL" : "PENDING";
+    const invoice = await prisma.invoice.update({
+      where: { id: existing.id },
+      data: {
+        items: (nextItems.length ? nextItems : null) as Prisma.InputJsonValue,
+        amount,
+        status,
+      },
+    });
+    res.json({ invoice });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Payments
 // ---------------------------------------------------------------------------

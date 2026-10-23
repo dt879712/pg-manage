@@ -8,6 +8,7 @@ import { radius, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import type { Student } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
+import { useRefreshOnFocus } from "@/lib/useRefreshOnFocus";
 
 function StudentsView() {
   const { colors } = useTheme();
@@ -16,6 +17,7 @@ function StudentsView() {
   const trimmed = q.trim();
   const path = trimmed ? `/students?q=${encodeURIComponent(trimmed)}` : "/students";
   const { data, loading, error, reload } = useApi<{ students: Student[]; total: number }>(path);
+  useRefreshOnFocus(reload);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>

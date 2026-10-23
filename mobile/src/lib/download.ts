@@ -14,6 +14,69 @@ async function isUsable(dirUri: string): Promise<boolean> {
   }
 }
 
+export function isTauri(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+/**
+ * Opens an HTML document for reading/printing: a separate browser tab in a
+ * browser, or a native preview window inside the Tauri desktop app (where
+ * `window.open` is a no-op).
+ */
+export async function openHtmlInWindow(html: string, title: string): Promise<void> {
+  if (isTauri()) {
+    const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+    const win = new WebviewWindow(`preview-${Date.now()}`, {
+      url: `data:text/html;charset=utf-8,${encodeURIComponent(html)}`,
+      title,
+      width: 900,
+      height: 1000,
+      center: true,
+    });
+    await new Promise<void>((resolve, reject) => {
+      win.once("tauri://error", (event) => {
+        const payload = (event as { payload?: unknown } | undefined)?.payload;
+        reject(new Error(typeof payload === "string" ? payload : "Could not open the preview window"));
+      });
+      win.once("tauri://created", () => resolve());
+    });
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+/**
+ * Saves an in-memory blob on the web/desktop build: a normal browser download
+ * in a browser, or a native save dialog inside the Tauri desktop app (where a
+ * plain anchor download is silently dropped).
+ */
+export async function saveBlobFile(blob: Blob, filename: string): Promise<void> {
+  if (isTauri()) {
+    const { save } = await import("@tauri-apps/plugin-dialog");
+    const { writeFile } = await import("@tauri-apps/plugin-fs");
+    const path = await save({ defaultPath: filename });
+    if (!path) return;
+    await writeFile(path, new Uint8Array(await blob.arrayBuffer()));
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
 /**
  * Saves base64-encoded bytes into a location the user can find, without the OS
  * share sheet. On Android the user picks a folder once and it is reused for

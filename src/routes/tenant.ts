@@ -23,7 +23,7 @@ tenantRouter.use(requireAuth, requireTenant);
 // ---------------------------------------------------------------------------
 
 /** An owner may run at most this many PGs (branches). */
-export const MAX_PGS_PER_OWNER = 4;
+export const MAX_PGS_PER_OWNER = 2;
 
 function slugify(name: string): string {
   return (
@@ -210,7 +210,13 @@ tenantRouter.patch("/", requireRole("OWNER"), async (req, res, next) => {
         city: z.string().nullable().optional(),
         phone: z.string().nullable().optional(),
         email: z.string().nullable().optional(),
-        primaryColor: z.string().nullable().optional(),
+        primaryColor: z
+          .union([
+            z.literal(""),
+            z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Use a hex colour like #0ea5e9"),
+          ])
+          .nullable()
+          .optional(),
         logoUrl: z.string().nullable().optional(),
       })
       .parse(req.body);

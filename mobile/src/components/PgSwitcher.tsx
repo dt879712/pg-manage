@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Alert, Modal, Pressable, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { Button, Card, ErrorText, Muted, Row, SectionTitle } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
+import { notify } from "@/lib/dialog";
 import { createPg } from "@/lib/endpoints";
 import { radius, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
@@ -11,7 +12,7 @@ import { useApi } from "@/lib/useApi";
 // Owner-only strip for choosing which branch (PG) to work in, and for adding
 // new branches. Always visible to owners so a single-branch owner has a way to
 // add their second one.
-const DEFAULT_LIMIT = 4;
+const DEFAULT_LIMIT = 2;
 
 export function PgSwitcher() {
   const { colors } = useTheme();
@@ -137,7 +138,7 @@ function CreatePgModal({
     setErr(null);
     try {
       await createPg({ name: name.trim(), city: city.trim() || undefined });
-      Alert.alert("Branch created", "You can now switch to it and set it up.");
+      notify("Branch created", "You can now switch to it and set it up.");
       onCreated();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to create branch");
@@ -151,7 +152,7 @@ function CreatePgModal({
         <View style={{ width: "100%", maxWidth: 480, alignSelf: "center", gap: space(3) }}>
           <SectionTitle>New branch</SectionTitle>
           <Muted style={{ fontSize: 12 }}>
-            {current} of {limit} branches used. Example names: D1, D2, D3, D4.
+            {current} of {limit} branches used. Example names: D1, D2.
           </Muted>
           <Field label="Branch name" value={name} onChangeText={setName} placeholder="e.g. D1" />
           <Field label="City (optional)" value={city} onChangeText={setCity} placeholder="e.g. Pune" />

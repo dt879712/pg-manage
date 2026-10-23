@@ -1,13 +1,25 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { Loading } from "@/components/ui";
 import { TopBar } from "@/components/topbar";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { ThemeProvider, useTheme } from "@/lib/theme-context";
 
 function AppStack() {
   const { isDark, colors } = useTheme();
-  const { sessionKey } = useAuth();
+  const { sessionKey, loading } = useAuth();
+  // Don't mount any screen until the saved session is restored. Otherwise a
+  // screen can fire its first API call before the token is loaded and get a
+  // 401, leaving it stuck on empty data until the user switches branches.
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <Loading />
+      </View>
+    );
+  }
   return (
     <>
       <StatusBar style={isDark ? "light" : "dark"} />

@@ -411,9 +411,10 @@ model Invoice {
   tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   studentId   String
   student     Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  title       String
-  amount      Int
-  periodMonth Int?
+    title       String
+    amount      Int
+    items       Json?
+    periodMonth Int?
   periodYear  Int?
   dueDate     DateTime?
   status      InvoiceStatus @default(PENDING)

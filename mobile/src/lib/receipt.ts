@@ -16,6 +16,7 @@ export interface ReceiptInput {
   roomNumber?: string | null;
   invoiceTitle: string;
   amount: number;
+  items?: { label: string; amount: number }[];
   priorPaid?: number;
   priorPaidAt?: string;
   paidAmount: number;
@@ -57,6 +58,9 @@ export function receiptHtml(r: ReceiptInput): string {
   const isPartial = due > 0;
   const hasPrior = Boolean(r.priorPaid && r.priorPaid > 0);
   const settledNow = hasPrior && !isPartial;
+  const items = r.items ?? [];
+  const itemsTotal = items.reduce((sum, i) => sum + i.amount, 0);
+  const baseAmount = Math.max(r.amount - itemsTotal, 0);
 
   const bankBlock = hasBank
     ? `
@@ -156,14 +160,20 @@ export function receiptHtml(r: ReceiptInput): string {
       <td>${esc(r.studentName)}</td>
       <td>${esc(r.roomNumber) || "-"}</td>
       <td>${esc(r.invoiceTitle)}</td>
-      <td class="num">${money(r.amount)}</td>
+      <td class="num">${money(baseAmount)}</td>
     </tr>
   </table>
 
   <div class="fee">
     <span>Fee amount</span>
-    <b>${money(r.amount)}</b>
+    <b>${money(baseAmount)}</b>
   </div>
+  ${items
+    .map(
+      (i) => `<div class="part"><span>${esc(i.label)}</span><b>${money(i.amount)}</b></div>`
+    )
+    .join("")}
+  ${items.length ? `<div class="fee" style="border-radius:0"><span>Total charges</span><b>${money(r.amount)}</b></div>` : ""}
   ${hasPrior ? `<div class="part"><span>Partial payment${r.priorPaidAt ? ` · on ${dayOf(r.priorPaidAt)}` : ""}</span><b>${money(r.priorPaid as number)}</b></div>` : ""}
   <div class="total" style="${isPartial ? "" : "border-radius:0 0 8px 8px;"}">
     <span>${hasPrior ? (settledNow ? "Due paid" : "Paid now") : "Paid"} · on ${dayOf(r.paidAt)}${r.method ? ` (${esc(r.method)})` : ""}${r.reference ? ` · Ref ${esc(r.reference)}` : ""}</span>

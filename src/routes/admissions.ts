@@ -341,9 +341,20 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
     let roomId: string | null = null;
     let bedId: string | null = null;
     if (body.bedId) {
-      const bed = await prisma.bed.findFirst({ where: { id: body.bedId, tenantId } });
+      const bed = await prisma.bed.findFirst({
+        where: { id: body.bedId, tenantId },
+        include: { room: { select: { status: true, roomNumber: true } } },
+      });
       if (!bed) {
         res.status(400).json({ error: "Invalid bed" });
+        return;
+      }
+      if (bed.room.status !== "ACTIVE") {
+        res.status(400).json({ error: `Room ${bed.room.roomNumber} is not accepting students right now.` });
+        return;
+      }
+      if (bed.status === "MAINTENANCE") {
+        res.status(400).json({ error: "That bed is under maintenance" });
         return;
       }
       if (bed.status === "OCCUPIED") {
@@ -365,6 +376,10 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
       const room = await prisma.room.findFirst({ where: { id: body.roomId, tenantId } });
       if (!room) {
         res.status(400).json({ error: "Invalid room" });
+        return;
+      }
+      if (room.status !== "ACTIVE") {
+        res.status(400).json({ error: `Room ${room.roomNumber} is not accepting students right now.` });
         return;
       }
       roomId = room.id;

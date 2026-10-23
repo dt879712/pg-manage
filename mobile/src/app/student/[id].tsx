@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Badge, Button, Card, ErrorText, Loading, Muted, Row, statusTone } from "@/components/ui";
 import { Avatar, DocumentGallery } from "@/components/documents";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { notify } from "@/lib/dialog";
 import {
   createStudentLogin,
   deleteDocument,
@@ -134,7 +135,7 @@ export default function StudentDetailScreen() {
       setLoginEmail("");
       setLoginPassword("");
       reload();
-      Alert.alert(
+      notify(
         "Login created",
         r.temporaryPassword
           ? `Login: ${isEmail ? r.user.email : s.phone ?? id}\nTemporary password:\n\n${r.temporaryPassword}\n\nShare it with the student.`
@@ -153,7 +154,7 @@ export default function StudentDetailScreen() {
     setLoginErr(null);
     try {
       const r = await resetUserPassword(s.userId);
-      Alert.alert(
+      notify(
         "Password reset",
         r.temporaryPassword ? `Temporary password:\n\n${r.temporaryPassword}` : "Password updated."
       );
@@ -363,6 +364,11 @@ export default function StudentDetailScreen() {
               <Muted>
                 {money(inv.amount)} · {shortDate(inv.createdAt)}
               </Muted>
+              {inv.items?.length ? (
+                <Muted>
+                  {inv.items.map((i) => `${i.label} ${money(i.amount)}`).join(" · ")}
+                </Muted>
+              ) : null}
             </View>
             <Badge label={inv.status} tone={statusTone(inv.status)} />
           </Row>
@@ -540,7 +546,7 @@ function TransferCard({ studentId, currentPgId }: { studentId: string; currentPg
       setTargetPg(null);
       setRoomId(null);
       setBedId(null);
-      Alert.alert("Student moved", `Moved to ${r.pg.name}.`);
+      notify("Student moved", `Moved to ${r.pg.name}.`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to move student");
     } finally {
@@ -593,9 +599,11 @@ function TransferCard({ studentId, currentPgId }: { studentId: string; currentPg
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space(2) }}>
                 {rooms.map((r) => {
                   const sel = roomId === r.id;
+                  const unavailable = r.status !== "ACTIVE";
                   return (
                     <Pressable
                       key={r.id}
+                      disabled={unavailable}
                       onPress={() => {
                         setRoomId(r.id);
                         setBedId(null);
@@ -606,10 +614,11 @@ function TransferCard({ studentId, currentPgId }: { studentId: string; currentPg
                           borderColor: sel ? colors.primarySolid : colors.border,
                           backgroundColor: sel ? colors.primarySolid : colors.bg,
                         },
+                        unavailable && { opacity: 0.4 },
                       ]}
                     >
                       <Text style={{ color: sel ? colors.onPrimary : colors.text, fontWeight: "600" }}>
-                        Room {r.roomNumber}
+                        Room {r.roomNumber}{unavailable ? " (unavailable)" : ""}
                       </Text>
                     </Pressable>
                   );
@@ -621,7 +630,7 @@ function TransferCard({ studentId, currentPgId }: { studentId: string; currentPg
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space(2) }}>
                   {beds.map((b) => {
                     const sel = bedId === b.id;
-                    const disabled = b.status === "OCCUPIED";
+                    const disabled = b.status !== "VACANT";
                     return (
                       <Pressable
                         key={b.id}

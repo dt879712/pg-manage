@@ -52,9 +52,15 @@ async function resolvePlacement(
   currentStudentId?: string
 ): Promise<{ roomId: string | null; bedId: string | null } | { error: string }> {
   if (bedId) {
-    const bed = await prisma.bed.findFirst({ where: { id: bedId, tenantId } });
+    const bed = await prisma.bed.findFirst({
+      where: { id: bedId, tenantId },
+      include: { room: { select: { status: true, roomNumber: true } } },
+    });
     if (!bed) return { error: "Invalid bed" };
     if (bed.status === "MAINTENANCE") return { error: "That bed is under maintenance" };
+    if (bed.room.status !== "ACTIVE") {
+      return { error: `Room ${bed.room.roomNumber} is not accepting students right now.` };
+    }
     const occupant = await prisma.student.findFirst({
       where: {
         bedId: bed.id,
@@ -73,6 +79,9 @@ async function resolvePlacement(
   if (roomId) {
     const room = await prisma.room.findFirst({ where: { id: roomId, tenantId } });
     if (!room) return { error: "Invalid room" };
+    if (room.status !== "ACTIVE") {
+      return { error: `Room ${room.roomNumber} is not accepting students right now.` };
+    }
     return { roomId: room.id, bedId: null };
   }
   return { roomId: null, bedId: null };

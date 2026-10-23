@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
-import { Button, Card, ErrorText, Loading, Muted } from "@/components/ui";
+import { Button, Card, ErrorText, Muted } from "@/components/ui";
 import { Avatar } from "@/components/documents";
 import { createStudent, uploadDocument } from "@/lib/endpoints";
 import { chooseImage, type PickedImage } from "@/lib/images";
@@ -13,7 +13,7 @@ import { useApi } from "@/lib/useApi";
 export default function NewStudent() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { data, loading } = useApi<{ rooms: Room[] }>("/rooms");
+  const { data, loading, error: roomsError, reload: reloadRooms } = useApi<{ rooms: Room[] }>("/rooms");
   const input = [
     inputStyle,
     { borderColor: colors.border, color: colors.text, backgroundColor: colors.bg },
@@ -22,6 +22,7 @@ export default function NewStudent() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
+  const [dob, setDob] = useState("");
   const [address, setAddress] = useState("");
   const [joinDate, setJoinDate] = useState("");
   const [guardianName, setGuardianName] = useState("");
@@ -43,7 +44,12 @@ export default function NewStudent() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const [roomQuery, setRoomQuery] = useState("");
   const rooms = data?.rooms ?? [];
+  const query = roomQuery.trim().toLowerCase();
+  const visibleRooms = query
+    ? rooms.filter((r) => r.roomNumber.toLowerCase().includes(query))
+    : rooms;
   const selected = rooms.find((r) => r.id === roomId);
   const beds = selected?.beds ?? [];
 
@@ -63,6 +69,7 @@ export default function NewStudent() {
         firstName: firstName.trim(),
         lastName: lastName.trim() || undefined,
         phone: phone.trim() || undefined,
+        dob: dob.trim() || undefined,
         address: address.trim() || undefined,
         guardianName: guardianName.trim() || undefined,
         guardianPhone: guardianPhone.trim() || undefined,
@@ -96,14 +103,21 @@ export default function NewStudent() {
       ];
       for (const doc of docs) {
         if (!doc.image) continue;
-        await uploadDocument({
-          studentId,
-          type: "ID_PROOF",
-          title: doc.title,
-          side: doc.side,
-          dataUrl: doc.image.dataUrl,
-          mimeType: doc.image.mimeType,
-        });
+        // The student already exists at this point; a failed document upload
+        // must not make the form look like the save failed (which would lead
+        // to duplicate students on retry).
+        try {
+          await uploadDocument({
+            studentId,
+            type: "ID_PROOF",
+            title: doc.title,
+            side: doc.side,
+            dataUrl: doc.image.dataUrl,
+            mimeType: doc.image.mimeType,
+          });
+        } catch {
+          // Document can be added later from the student profile.
+        }
       }
       router.back();
     } catch (e) {
@@ -111,8 +125,6 @@ export default function NewStudent() {
       setBusy(false);
     }
   };
-
-  if (loading) return <Loading />;
 
   return (
     <ScrollView
@@ -153,6 +165,14 @@ export default function NewStudent() {
         <TextInput value={firstName} onChangeText={setFirstName} placeholder="First name *" placeholderTextColor={colors.muted} style={input} />
         <TextInput value={lastName} onChangeText={setLastName} placeholder="Last name" placeholderTextColor={colors.muted} style={input} />
         <TextInput value={phone} onChangeText={setPhone} placeholder="Phone" placeholderTextColor={colors.muted} keyboardType="phone-pad" style={input} />
+        <TextInput
+          value={dob}
+          onChangeText={setDob}
+          placeholder="Date of birth (YYYY-MM-DD)"
+          placeholderTextColor={colors.muted}
+          autoCapitalize="none"
+          style={input}
+        />
         <TextInput
           value={joinDate}
           onChangeText={setJoinDate}
@@ -303,10 +323,28 @@ export default function NewStudent() {
 
       <Card style={{ gap: space(3) }}>
         <Text style={labelStyle}>Room / bed (optional)</Text>
+        {roomsError ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space(3) }}>
+            <Muted style={{ flex: 1 }}>Couldn&apos;t load rooms: {roomsError}</Muted>
+            <Button label="Retry" size="sm" variant="ghost" onPress={reloadRooms} />
+          </View>
+        ) : null}
+        {loading && rooms.length === 0 ? <Muted>Loading rooms…</Muted> : null}
+        {rooms.length > 12 ? (
+          <TextInput
+            value={roomQuery}
+            onChangeText={setRoomQuery}
+            placeholder="Search room number"
+            placeholderTextColor={colors.muted}
+            autoCapitalize="none"
+            style={input}
+          />
+        ) : null}
         <View style={styles.chips}>
-          {rooms.map((r) => (
+          {visibleRooms.map((r) => (
             <Pressable
               key={r.id}
+              disabled={r.status !== "ACTIVE"}
               onPress={() => {
                 setRoomId(r.id);
                 setBedId(null);
@@ -315,20 +353,26 @@ export default function NewStudent() {
               style={[
                 styles.chip,
                 { borderColor: colors.border, backgroundColor: colors.bg },
+                r.status !== "ACTIVE" && { opacity: 0.4 },
                 roomId === r.id && { backgroundColor: colors.primarySolid, borderColor: colors.primarySolid },
               ]}
             >
               <Text style={[styles.chipText, { color: roomId === r.id ? colors.onPrimary : colors.text }]}>
-                Room {r.roomNumber}
+                Room {r.roomNumber}{r.status !== "ACTIVE" ? " (unavailable)" : ""}
               </Text>
             </Pressable>
           ))}
-          {rooms.length === 0 ? <Muted>No rooms yet — create a room first</Muted> : null}
+          {!loading && !roomsError && rooms.length === 0 ? (
+            <Muted>No rooms yet — create a room first</Muted>
+          ) : null}
+          {rooms.length > 0 && visibleRooms.length === 0 ? (
+            <Muted>No room matches &quot;{roomQuery.trim()}&quot;</Muted>
+          ) : null}
         </View>
         {selected ? (
           <View style={styles.chips}>
             {beds.map((b) => {
-              const taken = b.status === "OCCUPIED";
+              const taken = b.status !== "VACANT";
               return (
                 <Pressable
                   key={b.id}

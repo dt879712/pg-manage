@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
   Badge,
@@ -15,7 +15,8 @@ import {
 import type { Tone } from "@/components/ui";
 import { Avatar } from "@/components/documents";
 import { DesktopShell } from "@/components/shell";
-import { createStaff, resetUserPassword } from "@/lib/endpoints";
+import { notify, confirmAction } from "@/lib/dialog";
+import { createStaff, deleteUser, resetUserPassword } from "@/lib/endpoints";
 import { radius, roleLabels, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import type { ManagedUser, Role } from "@/lib/types";
@@ -54,7 +55,7 @@ function UsersView() {
       const r = await resetUserPassword(u.id, newPassword);
       setResetFor(null);
       setResetPw("");
-      Alert.alert(
+      notify(
         "Password updated",
         r.temporaryPassword
           ? `Temporary password for ${u.name}:\n\n${r.temporaryPassword}\n\nShare it with them and ask them to change it after login.`
@@ -62,6 +63,34 @@ function UsersView() {
       );
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const remove = async (u: ManagedUser) => {
+    const ok = await confirmAction({
+      title: `Delete ${u.name}?`,
+      message:
+        u.role === "STUDENT"
+          ? "Their login will be removed. The student record stays and a new login can be created later."
+          : "They will no longer be able to sign in. Records they created stay in the system.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
+    setBusy(u.id);
+    setErr(null);
+    try {
+      await deleteUser(u.id);
+      if (resetFor?.id === u.id) {
+        setResetFor(null);
+        setResetPw("");
+      }
+      reload();
+      notify("Account deleted", `${u.name} can no longer sign in.`);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to delete the account");
     } finally {
       setBusy(null);
     }
@@ -195,38 +224,58 @@ function UsersView() {
       {(data?.users ?? []).length === 0 ? <Empty text="No accounts yet" /> : null}
 
       {(data?.users ?? []).map((u) => (
-        <View key={u.id} style={rowCard(colors.card, colors.border)}>
-          <Pressable
-            onPress={() => router.push({ pathname: "/user/[id]", params: { id: u.id } })}
-            style={{ flex: 1, minWidth: 0 }}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: space(2) }}>
-              <Avatar uri={u.photoUrl} name={u.name} size={40} />
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text numberOfLines={1} style={{ fontWeight: "700", color: colors.text }}>
-                  {u.name}
-                </Text>
-                <Muted numberOfLines={1}>
-                  {u.email.endsWith("@devhostel.local") ? u.phone ?? u.email : u.email}
-                </Muted>
+        <View
+          key={u.id}
+          style={[
+            rowCard(colors.card, colors.border),
+            { flexDirection: "column", alignItems: "stretch", gap: space(2) },
+          ]}
+        >
+          <Row style={{ gap: space(3) }}>
+            <Pressable
+              onPress={() => router.push({ pathname: "/user/[id]", params: { id: u.id } })}
+              style={{ flex: 1, minWidth: 0 }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: space(2) }}>
+                <Avatar uri={u.photoUrl} name={u.name} size={40} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text numberOfLines={1} style={{ fontWeight: "700", color: colors.text }}>
+                    {u.name}
+                  </Text>
+                  <Muted numberOfLines={1}>
+                    {u.email.endsWith("@devhostel.local") ? u.phone ?? u.email : u.email}
+                  </Muted>
+                </View>
               </View>
-            </View>
-          </Pressable>
-          <Badge label={roleLabels[u.role] ?? u.role} tone={roleTone[u.role]} />
-          {u.isActive ? (
-            <Muted>Active</Muted>
-          ) : (
-            <Text style={{ color: colors.danger, fontSize: 13, fontWeight: "600" }}>Disabled</Text>
-          )}
-          <Button
-            label="Set password"
-            variant="ghost"
-            size="sm"
-            onPress={() => {
-              setResetFor(u);
-              setResetPw("");
-            }}
-          />
+            </Pressable>
+            <Badge label={roleLabels[u.role] ?? u.role} tone={roleTone[u.role]} />
+            {u.isActive ? (
+              <Muted>Active</Muted>
+            ) : (
+              <Text style={{ color: colors.danger, fontSize: 13, fontWeight: "600" }}>Disabled</Text>
+            )}
+          </Row>
+          <Row style={{ gap: space(2), flexWrap: "wrap" }}>
+            <Button
+              label="Set password"
+              variant="ghost"
+              size="sm"
+              onPress={() => {
+                setResetFor(u);
+                setResetPw("");
+              }}
+            />
+            {u.role !== "OWNER" ? (
+              <Button
+                label="Delete"
+                variant="ghost"
+                size="sm"
+                icon="trash-outline"
+                loading={busy === u.id}
+                onPress={() => remove(u)}
+              />
+            ) : null}
+          </Row>
         </View>
       ))}
     </ScrollView>

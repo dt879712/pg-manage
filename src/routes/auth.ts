@@ -150,7 +150,13 @@ authRouter.get("/me", requireAuth, async (req, res, next) => {
       where: { id: req.user!.sub },
       select: { id: true, name: true, email: true, phone: true, role: true, tenantId: true },
     });
-    res.json({ user });
+    if (!user) {
+      res.status(404).json({ error: "Account not found" });
+      return;
+    }
+    // The active branch is whichever one the current session token is scoped
+    // to. The stored value is only the last branch picked at login/switch time.
+    res.json({ user: { ...user, tenantId: req.user!.tenantId ?? user.tenantId } });
   } catch (err) {
     next(err);
   }

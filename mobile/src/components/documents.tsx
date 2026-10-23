@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import { Alert, Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { Button, Card, ErrorText, Muted, Row } from "@/components/ui";
+import { confirmAction } from "@/lib/dialog";
 import { uploadDocument } from "@/lib/endpoints";
 import { chooseImage } from "@/lib/images";
 import { radius, space } from "@/lib/theme";
@@ -60,29 +61,45 @@ export function DocumentGallery({
   const { colors } = useTheme();
   const [viewing, setViewing] = useState<string | null>(null);
 
-  const confirmDelete = (doc: DocumentFile) => {
+  const confirmDelete = async (doc: DocumentFile) => {
     if (!onDelete) return;
-    Alert.alert("Delete document", "Remove this document?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => onDelete(doc) },
-    ]);
+    const ok = await confirmAction({
+      title: "Delete document",
+      message: "Remove this document?",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (ok) onDelete(doc);
   };
 
   return (
     <View style={{ gap: space(3) }}>
       <View style={styles.wrap}>
         {documents.map((d) => (
-          <Pressable
-            key={d.id}
-            onPress={() => setViewing(d.fileUrl)}
-            onLongPress={() => confirmDelete(d)}
-          >
-            <Image source={{ uri: d.fileUrl }} style={[styles.thumb, { backgroundColor: colors.cardAlt }]} />
+          <View key={d.id} style={{ width: 84 }}>
+            <Pressable
+              onPress={() => setViewing(d.fileUrl)}
+              onLongPress={() => confirmDelete(d)}
+            >
+              <Image
+                source={{ uri: d.fileUrl }}
+                style={[styles.thumb, { backgroundColor: colors.cardAlt }]}
+              />
+              {onDelete ? (
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => confirmDelete(d)}
+                  style={[styles.remove, { backgroundColor: colors.danger }]}
+                >
+                  <Text style={styles.removeText}>×</Text>
+                </Pressable>
+              ) : null}
+            </Pressable>
             <Text numberOfLines={1} style={[styles.caption, { color: colors.muted }]}>
               {d.title || d.type}
               {d.side ? ` · ${d.side}` : ""}
             </Text>
-          </Pressable>
+          </View>
         ))}
         {documents.length === 0 ? <Muted>No documents uploaded</Muted> : null}
       </View>
@@ -177,6 +194,17 @@ const styles = StyleSheet.create({
   wrap: { flexDirection: "row", flexWrap: "wrap", gap: space(3) },
   thumb: { width: 84, height: 84, borderRadius: radius.sm },
   caption: { width: 84, fontSize: 11, marginTop: 2 },
+  remove: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  removeText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700", lineHeight: 17 },
   modalBg: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.85)",

@@ -1,13 +1,15 @@
 import * as Print from "expo-print";
 import { WebView } from "react-native-webview";
 import { useState } from "react";
-import { Alert, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Badge, Button, Empty, ErrorText, Muted, Row, SkeletonRows, Stat, statusTone } from "@/components/ui";
 import { DesktopShell } from "@/components/shell";
 import { TopBar } from "@/components/topbar";
 import { PaymentInfo } from "@/components/payment";
 import { useAuth } from "@/lib/auth";
-import { createPayment } from "@/lib/endpoints";
+import { addInvoiceItem, createPayment, deleteInvoiceItem } from "@/lib/endpoints";
+import { notify } from "@/lib/dialog";
+import { openHtmlInWindow } from "@/lib/download";
 import { exportPdf } from "@/lib/formPdf";
 import { fullName, money, shortDate } from "@/lib/format";
 import { receiptHtml, type ReceiptInput } from "@/lib/receipt";
@@ -35,6 +37,11 @@ function FeesView() {
   const [amtText, setAmtText] = useState("");
   const [payMethod, setPayMethod] = useState<"CASH" | "UPI">("CASH");
   const [modalErr, setModalErr] = useState<string | null>(null);
+  const [billFor, setBillFor] = useState<Invoice | null>(null);
+  const [billLabel, setBillLabel] = useState("Electricity bill");
+  const [billAmount, setBillAmount] = useState("");
+  const [billBusy, setBillBusy] = useState(false);
+  const [billErr, setBillErr] = useState<string | null>(null);
 
   const list = data?.invoices ?? [];
   const collected = list.reduce((sum, i) => sum + paidOf(i), 0);
@@ -45,6 +52,9 @@ function FeesView() {
 
   const editBalance = editInv ? editInv.amount - paidOf(editInv) : 0;
   const editParsed = parseInt(amtText.replace(/\D/g, ""), 10) || 0;
+  const billParsed = parseInt(billAmount.replace(/\D/g, ""), 10) || 0;
+  const billItems = billFor?.items ?? [];
+  const smallLabel = { color: colors.muted, fontSize: 12, fontWeight: "700" as const };
 
   const receiptFor = (inv: Invoice, payment: Payment): ReceiptInput => {
     const t = tenantData?.tenant;
@@ -77,6 +87,7 @@ function FeesView() {
       roomNumber: inv.student?.room?.roomNumber ?? null,
       invoiceTitle: inv.title,
       amount: inv.amount,
+      items: inv.items ?? [],
       priorPaid,
       priorPaidAt: priorPayments[0]?.paidAt ?? undefined,
       paidAmount: payment.amount,
@@ -96,44 +107,10 @@ function FeesView() {
     studentNotified: number
   ) => {
     const notified = parentNotified + studentNotified;
-    Alert.alert(
+    notify(
       "Payment recorded",
       `Paid ${money(paid)} · ${due > 0 ? `Due ${money(due)}` : "No dues left"}` +
         (notified > 0 ? "\nNotification sent to parent & student." : "")
-    );
-  };
-
-  const pay = async (inv: Invoice, method: string) => {
-    setBusy(inv.id);
-    setErr(null);
-    try {
-      const outstandingAmt = inv.amount - paidOf(inv);
-      const res = await createPayment({
-        studentId: inv.studentId,
-        invoiceId: inv.id,
-        amount: outstandingAmt,
-        method,
-      });
-      reload();
-      await showSlip(inv, res.payment);
-      confirmPayment(res.payment.amount, res.outstanding, res.parentNotified, res.studentNotified);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed to record payment");
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const markPaid = (inv: Invoice) => {
-    const outstandingAmt = inv.amount - paidOf(inv);
-    Alert.alert(
-      "Record payment",
-      `${inv.title} · ${money(outstandingAmt)} due\nThe receipt will be forwarded to the parent and student.\nChoose the payment method.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Cash", onPress: () => pay(inv, "CASH") },
-        { text: "UPI", onPress: () => pay(inv, "UPI") },
-      ]
     );
   };
 
@@ -142,6 +119,55 @@ function FeesView() {
     setAmtText(String(inv.amount - paidOf(inv)));
     setPayMethod("CASH");
     setEditInv(inv);
+  };
+
+  const openBill = (inv: Invoice) => {
+    setBillErr(null);
+    setBillLabel("Electricity bill");
+    setBillAmount("");
+    setBillFor(inv);
+  };
+
+  const saveBill = async () => {
+    if (!billFor) return;
+    if (!billLabel.trim()) {
+      setBillErr("Enter a name for the bill.");
+      return;
+    }
+    if (billParsed <= 0) {
+      setBillErr("Enter a valid amount.");
+      return;
+    }
+    setBillBusy(true);
+    setBillErr(null);
+    try {
+      const res = await addInvoiceItem(billFor.id, {
+        label: billLabel.trim(),
+        amount: billParsed,
+      });
+      setBillFor(res.invoice);
+      setBillLabel("Electricity bill");
+      setBillAmount("");
+      reload();
+    } catch (e) {
+      setBillErr(e instanceof Error ? e.message : "Failed to add the bill");
+    } finally {
+      setBillBusy(false);
+    }
+  };
+
+  const removeBill = async (invoiceId: string, index: number) => {
+    setBillBusy(true);
+    setBillErr(null);
+    try {
+      const res = await deleteInvoiceItem(invoiceId, index);
+      setBillFor((current) => (current && current.id === invoiceId ? res.invoice : current));
+      reload();
+    } catch (e) {
+      setBillErr(e instanceof Error ? e.message : "Failed to remove the bill");
+    } finally {
+      setBillBusy(false);
+    }
   };
 
   const saveEdit = async () => {
@@ -232,6 +258,7 @@ function FeesView() {
         const outstandingAmt = inv.amount - paidAmt;
         const isPaid = inv.status === "PAID";
         const payment = lastPayment(inv);
+        const items = inv.items ?? [];
         return (
           <View key={inv.id} style={payRow(colors.card, colors.border)}>
             <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
@@ -254,6 +281,11 @@ function FeesView() {
                   Created {shortDate(inv.createdAt)}
                 </Text>
               )}
+              {items.length ? (
+                <Text numberOfLines={2} style={{ fontSize: 12, color: colors.muted }}>
+                  Bills: {items.map((i) => `${i.label} ${money(i.amount)}`).join(" · ")}
+                </Text>
+              ) : null}
             </View>
             <Badge label={inv.status} tone={statusTone(inv.status)} />
             {paidAmt > 0 ? (
@@ -264,11 +296,26 @@ function FeesView() {
                 onPress={() => download(inv)}
               />
             ) : null}
+            {isOwner && inv.status !== "CANCELLED" ? (
+              <Button
+                label="Add bill"
+                size="sm"
+                variant="ghost"
+                disabled={busy === inv.id}
+                onPress={() => openBill(inv)}
+              />
+            ) : null}
             {isOwner && !isPaid && outstandingAmt > 0 ? (
               <>
-                <Button label="Paid" loading={busy === inv.id} onPress={() => markPaid(inv)} />
+                <Button
+                  label="Paid"
+                  size="sm"
+                  loading={busy === inv.id}
+                  onPress={() => openEdit(inv)}
+                />
                 <Button
                   label="Edit amount"
+                  size="sm"
                   variant="ghost"
                   disabled={busy === inv.id}
                   onPress={() => openEdit(inv)}
@@ -290,6 +337,126 @@ function FeesView() {
         />
       ) : null}
       </ScrollView>
+    {billFor ? (
+      <Modal visible transparent animationType="slide" onRequestClose={() => setBillFor(null)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <Pressable style={{ flex: 1 }} onPress={() => setBillFor(null)} />
+          <View
+            style={{
+              backgroundColor: colors.card,
+              borderTopLeftRadius: radius.lg,
+              borderTopRightRadius: radius.lg,
+              borderTopWidth: 1,
+              borderColor: colors.border,
+              padding: space(4),
+              gap: space(3),
+            }}
+          >
+            <Row between>
+              <Text style={{ fontWeight: "800", fontSize: 16, color: colors.text }}>Add bill</Text>
+              <Pressable hitSlop={8} onPress={() => setBillFor(null)}>
+                <Text style={{ color: colors.muted, fontSize: 14 }}>Close</Text>
+              </Pressable>
+            </Row>
+
+            <View style={{ gap: 2 }}>
+              <Text style={{ color: colors.text, fontWeight: "700" }}>{billFor.title}</Text>
+              {billFor.student ? (
+                <Muted>
+                  {fullName(billFor.student.firstName, billFor.student.lastName)}
+                  {billFor.student.room ? ` · Room ${billFor.student.room.roomNumber}` : ""}
+                </Muted>
+              ) : null}
+              <Muted>Invoice total {money(billFor.amount)}</Muted>
+            </View>
+
+            {billItems.length ? (
+              <View style={{ gap: space(2) }}>
+                <Text style={smallLabel}>BILLS ON THIS INVOICE</Text>
+                {billItems.map((item, index) => (
+                  <View
+                    key={`${item.label}-${index}`}
+                    style={{ flexDirection: "row", alignItems: "center", gap: space(3) }}
+                  >
+                    <Text numberOfLines={1} style={{ flex: 1, color: colors.text }}>
+                      {item.label}
+                    </Text>
+                    <Text style={{ color: colors.text, fontWeight: "700" }}>{money(item.amount)}</Text>
+                    <Pressable
+                      hitSlop={8}
+                      disabled={billBusy}
+                      onPress={() => removeBill(billFor.id, index)}
+                    >
+                      <Text style={{ color: colors.danger, fontWeight: "700", fontSize: 13 }}>
+                        Remove
+                      </Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            <View style={{ gap: 6 }}>
+              <Text style={smallLabel}>BILL NAME</Text>
+              <TextInput
+                value={billLabel}
+                onChangeText={setBillLabel}
+                placeholder="Electricity bill"
+                placeholderTextColor={colors.muted}
+                style={{
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.bg,
+                  color: colors.text,
+                  borderRadius: radius.md,
+                  paddingHorizontal: space(3),
+                  paddingVertical: space(3),
+                  fontSize: 15,
+                }}
+              />
+            </View>
+
+            <View style={{ gap: 6 }}>
+              <Text style={smallLabel}>AMOUNT (₹)</Text>
+              <TextInput
+                value={billAmount}
+                onChangeText={setBillAmount}
+                keyboardType="numeric"
+                placeholder="e.g. 500"
+                placeholderTextColor={colors.muted}
+                style={{
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.bg,
+                  color: colors.text,
+                  borderRadius: radius.md,
+                  paddingHorizontal: space(3),
+                  paddingVertical: space(3),
+                  fontSize: 18,
+                  fontWeight: "700",
+                }}
+              />
+              <Muted>
+                {billParsed > 0
+                  ? `New invoice total ${money(billFor.amount + billParsed)} — printed as its own line on the receipt.`
+                  : "It is added to this invoice and printed on the fee receipt."}
+              </Muted>
+            </View>
+
+            <ErrorText>{billErr}</ErrorText>
+
+            <Row style={{ gap: space(3) }}>
+              <Button label="Cancel" variant="ghost" onPress={() => setBillFor(null)} />
+              <Button
+                label={billParsed > 0 ? `Add ${money(billParsed)}` : "Add bill"}
+                loading={billBusy}
+                onPress={saveBill}
+              />
+            </Row>
+          </View>
+        </View>
+      </Modal>
+    ) : null}
     {editInv ? (
       <Modal visible transparent animationType="slide" onRequestClose={() => setEditInv(null)}>
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}>
@@ -416,19 +583,21 @@ function FeesView() {
               label={Platform.OS === "web" ? "Open in tab" : "Print"}
               variant="ghost"
               onPress={async () => {
-                if (Platform.OS === "web") {
-                  const w = window.open("", "_blank");
-                  if (w) {
-                    w.document.open();
-                    w.document.write(preview.html);
-                    w.document.close();
+                if (Platform.OS !== "web") {
+                  try {
+                    await Print.printAsync({ html: preview.html });
+                  } catch (e) {
+                    notify("Print failed", e instanceof Error ? e.message : "Failed to print");
                   }
                   return;
                 }
                 try {
-                  await Print.printAsync({ html: preview.html });
+                  await openHtmlInWindow(preview.html, "Fee receipt");
                 } catch (e) {
-                  setErr(e instanceof Error ? e.message : "Failed to print");
+                  notify(
+                    "Could not open the receipt",
+                    e instanceof Error ? e.message : "Try Save PDF instead."
+                  );
                 }
               }}
             />
@@ -536,6 +705,7 @@ const styles = {
 const payRow = (bg: string, border: string) => ({
   flexDirection: "row" as const,
   alignItems: "center" as const,
+  flexWrap: "wrap" as const,
   gap: space(3),
   backgroundColor: bg,
   borderRadius: radius.md,

@@ -2,10 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import { File, Paths } from "expo-file-system";
 import * as LegacyFileSystem from "expo-file-system/legacy";
-import { saveBase64File } from "@/lib/download";
+import { saveBase64File, saveBlobFile } from "@/lib/download";
+import { notify } from "@/lib/dialog";
 import type { ComponentProps } from "react";
 import { useState } from "react";
-import { Alert, Image, Linking, Pressable, Text, View } from "react-native";
+import { Image, Linking, Platform, Pressable, Text, View } from "react-native";
 import { Button, Card, ErrorText, Muted, SectionTitle, SkeletonCard } from "@/components/ui";
 import { radius, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
@@ -42,7 +43,7 @@ export function PaymentInfo({ tenant }: { tenant?: TenantBranding | null }) {
 
   const copy = (value: string, what: string) => {
     Clipboard.setStringAsync(value);
-    Alert.alert("Copied", `${what} copied to clipboard.`);
+    notify("Copied", `${what} copied to clipboard.`);
   };
 
   const shareQr = async () => {
@@ -50,6 +51,14 @@ export function PaymentInfo({ tenant }: { tenant?: TenantBranding | null }) {
     setSharingQr(true);
     setErr(null);
     try {
+      if (Platform.OS === "web") {
+        const res = await fetch(t.upiQrUrl);
+        if (!res.ok) throw new Error("Could not download the QR code");
+        const blob = await res.blob();
+        await saveBlobFile(blob, `upi-qr.${blob.type.includes("jpeg") ? "jpg" : "png"}`);
+        notify("Downloaded", "UPI QR code saved.");
+        return;
+      }
       const dataUrl = t.upiQrUrl.startsWith("data:") ? t.upiQrUrl : null;
       let base64 = "";
       let mime = "image/png";
@@ -65,7 +74,7 @@ export function PaymentInfo({ tenant }: { tenant?: TenantBranding | null }) {
       }
       const ext = mime === "image/jpeg" || mime === "image/jpg" ? "jpg" : "png";
       await saveBase64File(base64, `upi-qr.${ext}`, mime);
-      Alert.alert("Downloaded", "UPI QR code saved.");
+      notify("Downloaded", "UPI QR code saved.");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not save the QR code");
     } finally {

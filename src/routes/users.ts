@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../prisma";
 import { hashPassword } from "../auth";
@@ -352,7 +353,17 @@ usersRouter.delete("/:id", async (req, res, next) => {
       res.status(400).json({ error: "Cannot delete owner" });
       return;
     }
-    await prisma.user.delete({ where: { id: existing.id } });
+    try {
+      await prisma.user.delete({ where: { id: existing.id } });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+        res.status(409).json({
+          error: "This account is linked to other records. Disable it instead of deleting.",
+        });
+        return;
+      }
+      throw err;
+    }
     res.json({ ok: true });
   } catch (err) {
     next(err);

@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Badge, Button, Card, ErrorText, Loading, Muted, Row } from "@/components/ui";
 import type { Tone } from "@/components/ui";
 import { Avatar, DocumentGallery } from "@/components/documents";
+import { notify } from "@/lib/dialog";
 import {
   deleteDocument,
   resetUserPassword,
@@ -236,7 +237,7 @@ export default function UserDetailScreen() {
             setErr(null);
             try {
               const r = await resetUserPassword(u.id);
-              Alert.alert(
+              notify(
                 "Password reset",
                 r.temporaryPassword
                   ? `Temporary password:\n\n${r.temporaryPassword}\n\nShare it with them.`

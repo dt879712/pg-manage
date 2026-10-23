@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Button, Card, ErrorText, Loading, Muted, Row } from "@/components/ui";
 import { Avatar } from "@/components/documents";
+import { confirmAction, notify } from "@/lib/dialog";
 import { addTenantImage, deleteTenantImage, updateTenant, updateUser } from "@/lib/endpoints";
 import { chooseImage } from "@/lib/images";
 import { useAuth } from "@/lib/auth";
@@ -46,7 +47,7 @@ export default function SettingsScreen() {
       });
       setForm(null);
       reload();
-      Alert.alert("Saved", "PG details updated.");
+      notify("Saved", "PG details updated.");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed");
     } finally {
@@ -66,7 +67,7 @@ export default function SettingsScreen() {
     try {
       const r = await updateUser(user.id, { email: next });
       setUser({ ...user, email: r.user.email });
-      Alert.alert("Saved", "Owner sign-in email updated. Use it to sign in next time.");
+      notify("Saved", "Owner sign-in email updated. Use it to sign in next time.");
     } catch (e) {
       setOwnerErr(e instanceof Error ? e.message : "Failed to update email");
     } finally {
@@ -88,7 +89,7 @@ export default function SettingsScreen() {
       });
       setForm(null);
       reload();
-      Alert.alert("Saved", "Payment details updated. These print on every receipt.");
+      notify("Saved", "Payment details updated. These print on every receipt.");
     } catch (e) {
       setPayErr(e instanceof Error ? e.message : "Failed");
     } finally {
@@ -268,19 +269,17 @@ export default function SettingsScreen() {
           {t.images.map((img) => (
             <Pressable
               key={img.id}
-              onLongPress={() =>
-                Alert.alert("Delete banner", "Remove this image?", [
-                  { text: "Cancel", style: "cancel" },
-                  {
-                    text: "Delete",
-                    style: "destructive",
-                    onPress: async () => {
-                      await deleteTenantImage(img.id);
-                      reload();
-                    },
-                  },
-                ])
-              }
+              onLongPress={async () => {
+                const ok = await confirmAction({
+                  title: "Delete banner",
+                  message: "Remove this image?",
+                  confirmLabel: "Delete",
+                  destructive: true,
+                });
+                if (!ok) return;
+                await deleteTenantImage(img.id);
+                reload();
+              }}
             >
               <Image source={{ uri: img.imageUrl }} style={[styles.thumb, { backgroundColor: colors.cardAlt }]} />
             </Pressable>
