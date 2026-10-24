@@ -21,6 +21,8 @@ export interface ReceiptInput {
   priorPaidAt?: string;
   paidAmount: number;
   dueAmount?: number;
+  advanceApplied?: number;
+  advanceRemaining?: number;
   method: string;
   reference?: string | null;
   paidAt: string;
@@ -100,6 +102,8 @@ export function receiptHtml(r: ReceiptInput): string {
   .badge.partial { color:#B45309; }
   .due { display:flex; justify-content:space-between; padding:11px 10px; margin-top:0;
          background:#FEF3C7; color:#92400E; font-size:15px; font-weight:700; border-radius:0 0 8px 8px; }
+  .advanceBalance { display:flex; justify-content:space-between; padding:11px 10px; margin-top:8px;
+         background:#DCFCE7; color:#14532D; font-size:14px; font-weight:700; border-radius:8px; }
   .meta { display:flex; justify-content:space-between; margin:16px 0; font-size:13px; }
   table { width:100%; border-collapse:collapse; margin-top:8px; font-size:14px; }
   th, td { text-align:left; padding:9px 8px; border-bottom:1px solid #E2E8F0; }
@@ -175,11 +179,13 @@ export function receiptHtml(r: ReceiptInput): string {
     .join("")}
   ${items.length ? `<div class="fee" style="border-radius:0"><span>Total charges</span><b>${money(r.amount)}</b></div>` : ""}
   ${hasPrior ? `<div class="part"><span>Partial payment${r.priorPaidAt ? ` · on ${dayOf(r.priorPaidAt)}` : ""}</span><b>${money(r.priorPaid as number)}</b></div>` : ""}
-  <div class="total" style="${isPartial ? "" : "border-radius:0 0 8px 8px;"}">
+  ${r.advanceApplied ? `<div class="part"><span>Advance applied to fees and bills</span><b>${money(r.advanceApplied)}</b></div>` : ""}
+  ${r.paidAmount > 0 ? `<div class="total" style="${isPartial ? "" : "border-radius:0 0 8px 8px;"}">
     <span>${hasPrior ? (settledNow ? "Due paid" : "Paid now") : "Paid"} · on ${dayOf(r.paidAt)}${r.method ? ` (${esc(r.method)})` : ""}${r.reference ? ` · Ref ${esc(r.reference)}` : ""}</span>
     <span>${money(r.paidAmount)}</span>
-  </div>
+  </div>` : ""}
   ${isPartial ? `<div class="due"><span>Balance due</span><span>${money(due)}</span></div>` : ""}
+  ${r.advanceRemaining !== undefined ? `<div class="advanceBalance"><span>Advance balance remaining</span><span>${money(r.advanceRemaining)}</span></div>` : ""}
 
   ${r.advanceMonths?.length ? `<div class="adv"><div class="advTitle">Advance months paid</div><div class="advList">${r.advanceMonths.map((m) => esc(m)).join(" · ")}</div></div>` : ""}
 

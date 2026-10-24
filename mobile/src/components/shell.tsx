@@ -22,7 +22,6 @@ const NAV: NavItem[] = [
   { label: "Admissions", href: "/admissions", icon: "document-text-outline", roles: ["OWNER"] },
   { label: "Rooms", href: "/rooms", icon: "bed-outline", roles: ["OWNER", "STAFF"] },
   { label: "Fees", href: "/fees", icon: "cash-outline", roles: ["OWNER", "STUDENT", "PARENT"] },
-  { label: "Ad-Fees", href: "/ad-fees", icon: "calendar-outline", roles: ["OWNER", "STUDENT", "PARENT"] },
   { label: "Leaves", href: "/leaves", icon: "calendar-outline", roles: [] },
   {
     label: "Check-in videos",

@@ -34,6 +34,7 @@ function AdvanceFeesView() {
   const { data, loading, error, reload } = useApi<{
     advanceFees: AdvanceFee[];
     superParents: SuperParentSummary[];
+    summary: { allTimeReceived: number; thisMonthReceived: number };
     total: number;
   }>("/advance-fees?take=100");
   const { data: studentData, loading: loadingStudents } = useApi<{ students: Student[]; total: number }>(
@@ -128,6 +129,21 @@ function AdvanceFeesView() {
       </Row>
 
       <ErrorText>{error}</ErrorText>
+
+      <Row style={{ gap: space(3), flexWrap: "wrap" }}>
+        <Card style={{ flex: 1, minWidth: 210, gap: space(1) }}>
+          <Muted>Ad-Fees received this month</Muted>
+          <Text style={{ color: colors.text, fontWeight: "800", fontSize: 22 }}>
+            {money(data?.summary.thisMonthReceived ?? 0)}
+          </Text>
+        </Card>
+        <Card style={{ flex: 1, minWidth: 210, gap: space(1) }}>
+          <Muted>Total Ad-Fees received</Muted>
+          <Text style={{ color: colors.text, fontWeight: "800", fontSize: 22 }}>
+            {money(data?.summary.allTimeReceived ?? 0)}
+          </Text>
+        </Card>
+      </Row>
 
       {isOwner ? (
         <Card style={{ gap: space(2) }}>

@@ -2,13 +2,12 @@ import * as Print from "expo-print";
 import { WebView } from "react-native-webview";
 import { useState } from "react";
 import { Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { useRouter } from "expo-router";
 import { Badge, Button, Empty, ErrorText, Muted, Row, SkeletonRows, Stat, statusTone } from "@/components/ui";
 import { DesktopShell } from "@/components/shell";
 import { TopBar } from "@/components/topbar";
 import { PaymentInfo } from "@/components/payment";
 import { useAuth } from "@/lib/auth";
-import { addInvoiceItem, createPayment, deleteInvoiceItem } from "@/lib/endpoints";
+import { addInvoiceItem, createAdvanceFee, createPayment, deleteInvoiceItem } from "@/lib/endpoints";
 import { notify } from "@/lib/dialog";
 import { openHtmlInWindow } from "@/lib/download";
 import { exportPdf } from "@/lib/formPdf";
@@ -21,11 +20,12 @@ import { useApi } from "@/lib/useApi";
 import { useRefreshOnFocus } from "@/lib/useRefreshOnFocus";
 
 type Tab = "COLLECTED" | "DUE";
+type AdvanceMethod = "CASH" | "UPI" | "CARD" | "BANK_TRANSFER" | "OTHER";
+const advanceMethods: AdvanceMethod[] = ["CASH", "UPI", "CARD", "BANK_TRANSFER", "OTHER"];
 
 function FeesView() {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const router = useRouter();
   const isOwner = user?.role === "OWNER";
   const { data, loading, error, reload } = useApi<{ invoices: Invoice[]; total: number }>("/invoices?take=100");
   const { data: tenantData } = useApi<{ tenant: TenantBranding }>("/tenant");
@@ -44,6 +44,13 @@ function FeesView() {
   const [billAmount, setBillAmount] = useState("");
   const [billBusy, setBillBusy] = useState(false);
   const [billErr, setBillErr] = useState<string | null>(null);
+  const [advanceFor, setAdvanceFor] = useState<Invoice | null>(null);
+  const [advanceAmount, setAdvanceAmount] = useState("");
+  const [advancePaidAt, setAdvancePaidAt] = useState(todayString());
+  const [advancePaidThrough, setAdvancePaidThrough] = useState("");
+  const [advanceMethod, setAdvanceMethod] = useState<AdvanceMethod>("CASH");
+  const [advanceBusy, setAdvanceBusy] = useState(false);
+  const [advanceErr, setAdvanceErr] = useState<string | null>(null);
 
   const list = data?.invoices ?? [];
   const collected = list.reduce((sum, i) => sum + paidOf(i), 0);
@@ -58,15 +65,17 @@ function FeesView() {
   const billItems = billFor?.items ?? [];
   const smallLabel = { color: colors.muted, fontSize: 12, fontWeight: "700" as const };
 
-  const receiptFor = (inv: Invoice, payment: Payment): ReceiptInput => {
+  const receiptFor = (inv: Invoice, payment: Payment | null): ReceiptInput => {
     const t = tenantData?.tenant;
     const payments = inv.payments ?? [];
-    const known = payments.some((p) => p.id === payment.id);
-    const totalPaid =
-      payments.reduce((sum, p) => sum + p.amount, 0) + (known ? 0 : payment.amount);
+    const priorPayments = payments.filter((p) => p.id !== payment?.id);
+    const priorCash = priorPayments.reduce((sum, p) => sum + p.amount, 0);
+    const advanceApplied = inv.advanceApplied ?? 0;
+    const currentPaid = payment?.amount ?? 0;
+    const totalPaid = priorCash + advanceApplied + currentPaid;
     const dueAmount = Math.max(inv.amount - totalPaid, 0);
-    const priorPaid = totalPaid - payment.amount;
-    const priorPayments = payments.filter((p) => p.id !== payment.id).sort(
+    const priorPaid = priorCash;
+    const priorPaymentsByDate = priorPayments.sort(
       (a, b) => Date.parse(b.paidAt) - Date.parse(a.paidAt)
     );
     return {
@@ -91,14 +100,16 @@ function FeesView() {
       amount: inv.amount,
       items: inv.items ?? [],
       priorPaid,
-      priorPaidAt: priorPayments[0]?.paidAt ?? undefined,
-      paidAmount: payment.amount,
+      priorPaidAt: priorPaymentsByDate[0]?.paidAt ?? undefined,
+      paidAmount: currentPaid,
       dueAmount,
-      method: payment.method ?? "",
+      advanceApplied,
+      advanceRemaining: inv.advanceBalance ?? 0,
+      method: payment?.method ?? (advanceApplied > 0 ? "ADVANCE" : ""),
       reference: null,
-      paidAt: payment.paidAt,
-      receiptNo: payment.id.slice(-8).toUpperCase(),
-      advanceMonths: advanceMonthsFor(list, inv, payment),
+      paidAt: payment?.paidAt ?? inv.createdAt,
+      receiptNo: (payment?.id ?? `ADV-${inv.id}`).slice(-8).toUpperCase(),
+      advanceMonths: payment ? advanceMonthsFor(list, inv, payment) : [],
     };
   };
 
@@ -128,6 +139,51 @@ function FeesView() {
     setBillLabel("Electricity bill");
     setBillAmount("");
     setBillFor(inv);
+  };
+
+  const openAdvance = (inv: Invoice) => {
+    setAdvanceFor(inv);
+    setAdvanceAmount("");
+    setAdvancePaidAt(todayString());
+    setAdvancePaidThrough("");
+    setAdvanceMethod("CASH");
+    setAdvanceErr(null);
+  };
+
+  const saveAdvance = async () => {
+    if (!advanceFor) return;
+    const amount = Number(advanceAmount.replace(/\D/g, ""));
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
+      setAdvanceErr("Enter a valid advance amount.");
+      return;
+    }
+    if (!isDate(advancePaidAt) || !isDate(advancePaidThrough)) {
+      setAdvanceErr("Enter valid paid-on and paid-through dates as YYYY-MM-DD.");
+      return;
+    }
+    if (advancePaidThrough < advancePaidAt) {
+      setAdvanceErr("Paid-through date must be on or after the payment date.");
+      return;
+    }
+    setAdvanceBusy(true);
+    setAdvanceErr(null);
+    try {
+      await createAdvanceFee({
+        studentId: advanceFor.studentId,
+        amount,
+        method: advanceMethod,
+        paidAt: advancePaidAt,
+        paidThrough: advancePaidThrough,
+        note: "Advance payment",
+      });
+      setAdvanceFor(null);
+      reload();
+      notify("Advance recorded", `${money(amount)} was applied to the oldest unpaid fee or bill first.`);
+    } catch (e) {
+      setAdvanceErr(e instanceof Error ? e.message : "Could not record the advance.");
+    } finally {
+      setAdvanceBusy(false);
+    }
   };
 
   const saveBill = async () => {
@@ -205,18 +261,18 @@ function FeesView() {
     }
   };
 
-  const showSlip = async (inv: Invoice, payment: Payment) => {
+  const showSlip = async (inv: Invoice, payment: Payment | null) => {
     const html = receiptHtml(receiptFor(inv, payment));
     setPreview({ html, title: inv.title });
   };
 
   const download = async (inv: Invoice) => {
     const payment = lastPayment(inv);
-    if (!payment) return;
+    if (!payment && !(inv.advanceApplied && inv.advanceApplied > 0)) return;
     setBusy(inv.id);
     setErr(null);
     try {
-      await showSlip(inv, payment);
+      await showSlip(inv, payment ?? null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed");
     } finally {
@@ -238,7 +294,6 @@ function FeesView() {
       <ScrollView contentContainerStyle={{ padding: space(4), gap: space(3) }}>
       <Row between style={{ flexWrap: "wrap" }}>
         <Text style={{ color: colors.text, fontWeight: "800", fontSize: 18 }}>Fees</Text>
-        <Button label="Ad-Fees" variant="ghost" size="sm" icon="arrow-forward" onPress={() => router.push("/(tabs)/ad-fees")} />
       </Row>
       {!isOwner ? <PaymentInfo tenant={tenantData?.tenant} /> : null}
       <ErrorText>{error || err}</ErrorText>
@@ -287,6 +342,11 @@ function FeesView() {
                   Created {shortDate(inv.createdAt)}
                 </Text>
               )}
+              {(inv.advanceTotal ?? 0) > 0 ? (
+                <Text numberOfLines={2} style={{ fontSize: 12, color: "#14532D", fontWeight: "700" }}>
+                  Advance paid {money(inv.advanceTotal ?? 0)} · Used {money(inv.advanceApplied ?? 0)} · Remaining {money(inv.advanceBalance ?? 0)}
+                </Text>
+              ) : null}
               {items.length ? (
                 <Text numberOfLines={2} style={{ fontSize: 12, color: colors.muted }}>
                   Bills: {items.map((i) => `${i.label} ${money(i.amount)}`).join(" · ")}
@@ -309,6 +369,15 @@ function FeesView() {
                 variant="ghost"
                 disabled={busy === inv.id}
                 onPress={() => openBill(inv)}
+              />
+            ) : null}
+            {isOwner && inv.status !== "CANCELLED" && inv.student ? (
+              <Button
+                label="Record advance"
+                size="sm"
+                variant="ghost"
+                disabled={busy === inv.id}
+                onPress={() => openAdvance(inv)}
               />
             ) : null}
             {isOwner && !isPaid && outstandingAmt > 0 ? (
@@ -576,6 +645,70 @@ function FeesView() {
         </View>
       </Modal>
     ) : null}
+    {advanceFor ? (
+      <Modal visible transparent animationType="slide" onRequestClose={() => setAdvanceFor(null)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <Pressable style={{ flex: 1 }} onPress={() => setAdvanceFor(null)} />
+          <View
+            style={{
+              backgroundColor: colors.card,
+              borderTopLeftRadius: radius.lg,
+              borderTopRightRadius: radius.lg,
+              borderTopWidth: 1,
+              borderColor: colors.border,
+              padding: space(4),
+              gap: space(3),
+            }}
+          >
+            <Row between>
+              <Text style={{ fontWeight: "800", fontSize: 16, color: colors.text }}>Record advance payment</Text>
+              <Pressable hitSlop={8} onPress={() => setAdvanceFor(null)}>
+                <Text style={{ color: colors.muted, fontSize: 14 }}>Close</Text>
+              </Pressable>
+            </Row>
+            <View style={{ gap: 2 }}>
+              <Text style={{ color: colors.text, fontWeight: "700" }}>{advanceFor.student ? fullName(advanceFor.student.firstName, advanceFor.student.lastName) : "Student"}</Text>
+              <Muted>Advance first pays the oldest unpaid fee or bill. Any leftover stays available for later invoices.</Muted>
+            </View>
+            <TextInput
+              value={advanceAmount}
+              onChangeText={setAdvanceAmount}
+              keyboardType="numeric"
+              placeholder="Advance amount (₹)"
+              placeholderTextColor={colors.muted}
+              style={{ borderWidth: 1, borderColor: advanceErr ? colors.danger : colors.border, backgroundColor: colors.bg, color: colors.text, borderRadius: radius.md, paddingHorizontal: space(3), paddingVertical: space(3), fontSize: 18, fontWeight: "700" }}
+            />
+            <View style={{ gap: space(1) }}>
+              <Text style={{ color: colors.text, fontWeight: "700" }}>Paid on</Text>
+              <TextInput value={advancePaidAt} onChangeText={setAdvancePaidAt} placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} style={{ borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, color: colors.text, borderRadius: radius.md, paddingHorizontal: space(3), paddingVertical: space(3), fontSize: 15 }} />
+            </View>
+            <View style={{ gap: space(1) }}>
+              <Text style={{ color: colors.text, fontWeight: "700" }}>Paid through</Text>
+              <TextInput value={advancePaidThrough} onChangeText={setAdvancePaidThrough} placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} style={{ borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg, color: colors.text, borderRadius: radius.md, paddingHorizontal: space(3), paddingVertical: space(3), fontSize: 15 }} />
+            </View>
+            <View style={{ gap: space(1) }}>
+              <Text style={{ color: colors.text, fontWeight: "700" }}>Payment method</Text>
+              <Row style={{ gap: space(2), flexWrap: "wrap" }}>
+                {advanceMethods.map((method) => (
+                  <Pressable
+                    key={method}
+                    onPress={() => setAdvanceMethod(method)}
+                    style={{ borderWidth: 1, borderColor: advanceMethod === method ? colors.primary : colors.border, backgroundColor: advanceMethod === method ? colors.primarySoft : colors.bg, paddingHorizontal: space(3), paddingVertical: space(2), borderRadius: radius.pill }}
+                  >
+                    <Text style={{ color: advanceMethod === method ? colors.primary : colors.text, fontWeight: "600" }}>{method.replace("_", " ")}</Text>
+                  </Pressable>
+                ))}
+              </Row>
+            </View>
+            <ErrorText>{advanceErr}</ErrorText>
+            <Row style={{ gap: space(3) }}>
+              <Button label="Cancel" variant="ghost" onPress={() => setAdvanceFor(null)} />
+              <Button label="Save advance" loading={advanceBusy} onPress={saveAdvance} />
+            </Row>
+          </View>
+        </View>
+      </Modal>
+    ) : null}
     {preview ? (
       <Modal visible animationType="slide" onRequestClose={() => setPreview(null)}>
         <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -654,7 +787,7 @@ export default function Fees() {
 }
 
 function paidOf(inv: Invoice): number {
-  return (inv.payments ?? []).reduce((sum, p) => sum + p.amount, 0);
+  return (inv.payments ?? []).reduce((sum, p) => sum + p.amount, 0) + (inv.advanceApplied ?? 0);
 }
 
 function lastPayment(inv: Invoice): Payment | undefined {
@@ -664,6 +797,17 @@ function lastPayment(inv: Invoice): Payment | undefined {
 
 function ymIndex(month: number, year: number): number {
   return year * 12 + (month - 1);
+}
+
+function todayString(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function isDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 function monthLabel(month: number, year: number): string {

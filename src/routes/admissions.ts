@@ -8,6 +8,7 @@ import { sendPushToUsers } from "../lib/push";
 import { mailConfigured, sendMail } from "../lib/mail";
 import { storeMedia, resolveMediaUrl } from "../lib/fileStore";
 import { ensureGuardianParent } from "../lib/guardian";
+import { reconcileAdvanceFees } from "../lib/advanceFees";
 
 export const admissionsRouter = Router();
 
@@ -505,6 +506,7 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
             recordedById: req.user!.sub,
           },
         });
+        await reconcileAdvanceFees(tx, tenantId, created.id);
       }
       return created;
     });

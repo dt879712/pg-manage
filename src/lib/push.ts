@@ -1,6 +1,7 @@
 import { GoogleAuth } from "google-auth-library";
 import { prisma } from "../prisma";
 import { env } from "../env";
+import webPush from "web-push";
 
 type PushPayload = {
   title: string;
@@ -138,19 +139,48 @@ export async function sendPushToUsers(
   payload: PushPayload
 ): Promise<number> {
   if (!userIds.length) return 0;
-  const tokens = await prisma.deviceToken.findMany({
-    where: { userId: { in: userIds } },
-    select: { token: true },
-  });
-  if (!tokens.length) return 0;
-
-  const all = tokens.map(({ token }) => ({ to: token, ...payload }));
-  const expoMessages = all.filter((m) => isExpoToken(m.to));
-  const fcmMessages = all.filter((m) => !isExpoToken(m.to));
-
+  const [tokens, webSubscriptions] = await Promise.all([
+    prisma.deviceToken.findMany({ where: { userId: { in: userIds } }, select: { token: true } }),
+    prisma.webPushSubscription.findMany({
+      where: { userId: { in: userIds } },
+      select: { id: true, endpoint: true, p256dh: true, auth: true },
+    }),
+  ]);
   let sent = 0;
-  if (fcmMessages.length) sent += await sendFcm(fcmMessages);
-  if (expoMessages.length) sent += await sendExpoPush(expoMessages);
+  if (tokens.length) {
+    const all = tokens.map(({ token }) => ({ to: token, ...payload }));
+    const expoMessages = all.filter((m) => isExpoToken(m.to));
+    const fcmMessages = all.filter((m) => !isExpoToken(m.to));
+    if (fcmMessages.length) sent += await sendFcm(fcmMessages);
+    if (expoMessages.length) sent += await sendExpoPush(expoMessages);
+  }
+
+  if (webSubscriptions.length && env.webPushVapidPublicKey && env.webPushVapidPrivateKey) {
+    webPush.setVapidDetails(
+      env.webPushVapidSubject,
+      env.webPushVapidPublicKey,
+      env.webPushVapidPrivateKey
+    );
+    const results = await Promise.all(webSubscriptions.map(async (subscription) => {
+      try {
+        await webPush.sendNotification(
+          { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
+          JSON.stringify({ title: payload.title, body: payload.body, data: payload.data ?? {} }),
+          { TTL: 60 * 60 * 24 }
+        );
+        return true;
+      } catch (err) {
+        const statusCode = (err as { statusCode?: number }).statusCode;
+        if (statusCode === 404 || statusCode === 410) {
+          await prisma.webPushSubscription.deleteMany({ where: { id: subscription.id } });
+        } else {
+          console.error("Web push send failed", statusCode ?? "unknown", err);
+        }
+        return false;
+      }
+    }));
+    sent += results.filter(Boolean).length;
+  }
   return sent;
 }
 

@@ -5,10 +5,63 @@ import { prisma } from "../prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { requireTenant } from "../middleware/tenant";
 import { sendPushToUsers } from "../lib/push";
+import { env } from "../env";
 
 export const notificationsRouter = Router();
 
 notificationsRouter.use(requireAuth, requireTenant);
+
+notificationsRouter.get("/web-push/config", (_req, res) => {
+  if (!env.webPushVapidPublicKey || !env.webPushVapidPrivateKey) {
+    res.status(503).json({ error: "Browser notifications are not configured yet" });
+    return;
+  }
+  res.json({ publicKey: env.webPushVapidPublicKey });
+});
+
+notificationsRouter.post("/web-push/subscribe", async (req, res, next) => {
+  try {
+    if (!env.webPushVapidPublicKey || !env.webPushVapidPrivateKey) {
+      res.status(503).json({ error: "Browser notifications are not configured yet" });
+      return;
+    }
+    const body = z.object({
+      endpoint: z.string().url().refine((value) => value.startsWith("https://")),
+      keys: z.object({ p256dh: z.string().min(1), auth: z.string().min(1) }),
+    }).parse(req.body);
+    await prisma.webPushSubscription.upsert({
+      where: { endpoint: body.endpoint },
+      create: {
+        endpoint: body.endpoint,
+        p256dh: body.keys.p256dh,
+        auth: body.keys.auth,
+        userId: req.user!.sub,
+        tenantId: req.user!.tenantId,
+      },
+      update: {
+        p256dh: body.keys.p256dh,
+        auth: body.keys.auth,
+        userId: req.user!.sub,
+        tenantId: req.user!.tenantId,
+      },
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+notificationsRouter.delete("/web-push/subscribe", async (req, res, next) => {
+  try {
+    const body = z.object({ endpoint: z.string().url() }).parse(req.body);
+    await prisma.webPushSubscription.deleteMany({
+      where: { endpoint: body.endpoint, userId: req.user!.sub },
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
 
 const audienceRoles: Record<string, Role[]> = {
   ALL: ["OWNER", "STAFF", "STUDENT", "PARENT"],

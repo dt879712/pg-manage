@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, loadApiUrl, loadToken, saveToken } from "./api";
-import { syncPushToken } from "./push";
+import { disableWebPush, syncPushToken } from "./push";
 import { invalidateApiCache } from "./useApi";
 import type { AuthUser } from "./types";
 
@@ -54,6 +54,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    try {
+      await disableWebPush();
+    } catch {
+      // Signing out must still work if subscription cleanup is offline.
+    }
     await saveToken(null);
     invalidateApiCache();
     setUser(null);

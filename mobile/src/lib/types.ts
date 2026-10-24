@@ -114,6 +114,9 @@ export interface Invoice {
   studentId: string;
     title: string;
     amount: number;
+  advanceApplied?: number;
+  advanceTotal?: number;
+  advanceBalance?: number;
     items?: { label: string; amount: number }[] | null;
     status: string;
   periodMonth?: number | null;

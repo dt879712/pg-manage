@@ -94,3 +94,17 @@ gh run download <run-id> -n dev-hostel-macos     # .dmg (Apple Silicon)
 - **Migrations going forward**: change `prisma/schema.prisma` → `npx prisma migrate dev --name <change>`
   → commit; the deploy runs `prisma migrate deploy` automatically.
 - **Monitoring**: Cloud Run logs / metrics, and the `/health` endpoint.
+# Browser push notifications
+
+Browser notifications are opt-in from Profile. Generate a VAPID key pair once
+with `npx web-push generate-vapid-keys --json`, then set these API environment
+variables in Render (keep the private key secret):
+
+- `WEB_PUSH_VAPID_PUBLIC_KEY`
+- `WEB_PUSH_VAPID_PRIVATE_KEY`
+- `WEB_PUSH_VAPID_SUBJECT` (for example `mailto:no-reply@devhostel.app`)
+
+The API container applies the `web_push_subscriptions` migration at startup.
+After setting the keys and deploying the API and web site, users can enable
+alerts in Profile. iPhone/iPad users need iOS/iPadOS 16.4 or newer and must
+open the site from its Home Screen app before enabling notifications.

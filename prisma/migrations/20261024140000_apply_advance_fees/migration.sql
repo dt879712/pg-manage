@@ -1,0 +1,2 @@
+ALTER TABLE "invoices"
+  ADD COLUMN "advanceApplied" INTEGER NOT NULL DEFAULT 0;

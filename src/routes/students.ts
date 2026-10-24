@@ -8,6 +8,7 @@ import { requireTenant } from "../middleware/tenant";
 import { parsePagination } from "../lib/pagination";
 import { storeMaybeDataUrl, resolveOptionalUrl, resolveMediaUrl } from "../lib/fileStore";
 import { accountEmailFor } from "../lib/guardian";
+import { reconcileAdvanceFees } from "../lib/advanceFees";
 
 export const studentsRouter = Router();
 
@@ -309,6 +310,7 @@ studentsRouter.post("/", async (req, res, next) => {
             recordedById: req.user!.sub,
           },
         });
+        await reconcileAdvanceFees(tx, tenantId, created.id);
       }
 
       return created;

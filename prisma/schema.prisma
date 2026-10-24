@@ -160,6 +160,7 @@ model Tenant {
   notifications Notification[]
   auditLogs     AuditLog[]
   deviceTokens  DeviceToken[]
+  webPushSubscriptions WebPushSubscription[]
   images        TenantImage[]
   leaveRequests LeaveRequest[]
   messages      Message[]
@@ -212,6 +213,7 @@ model User {
   notificationInbox    NotificationRecipient[]
   auditLogs            AuditLog[]
   deviceTokens         DeviceToken[]
+  webPushSubscriptions WebPushSubscription[]
   passwordResets       PasswordResetToken[]
   admissionRequests    AdmissionRequest[]  @relation("AdmissionUser")
   reviewedAdmissions   AdmissionRequest[]  @relation("AdmissionReviewer")
@@ -417,6 +419,7 @@ model Invoice {
     title       String
     amount      Int
     items       Json?
+  advanceApplied Int      @default(0)
     periodMonth Int?
   periodYear  Int?
   dueDate     DateTime?
@@ -455,7 +458,7 @@ model Payment {
   @@map("payments")
 }
 
-// Advance-fee payments stay separate from monthly invoices and payments.
+// Advance-fee payments are deposits that can be applied to monthly invoices.
 model AdvanceFee {
   id           String        @id @default(cuid())
   tenantId     String
@@ -678,6 +681,23 @@ model DeviceToken {
 
   @@index([userId])
   @@map("device_tokens")
+}
+
+model WebPushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([tenantId])
+  @@map("web_push_subscriptions")
 }
 
 model AuditLog {

@@ -2,7 +2,7 @@ import { ScrollView, Text, View } from "react-native";
 import { space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 
-const UPDATED = "16 October 2026";
+const UPDATED = "24 October 2026";
 const CONTACT = "supportdevhostel@gmail.com";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -42,8 +42,9 @@ export default function PrivacyPolicy() {
         Account details (name, email address, phone number, role); hostel/tenant profile and room
         records; student records (name, room, contact and guardian details); fee invoices and
         payment records; attendance/check-in and check-out times; and short (about 6-second)
-        check-in/check-out videos captured at the gate. We also collect a device push token so we
-        can send notifications, and basic technical data needed to operate the service.
+        check-in/check-out videos captured at the gate. If you enable notifications, we store a
+        device push token or browser push subscription so we can deliver them, along with basic
+        technical data needed to operate the service.
       </Section>
 
       <Section title="How we use information">

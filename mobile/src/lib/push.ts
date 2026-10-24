@@ -88,6 +88,10 @@ export async function getPushToken(): Promise<{ token: string; platform: string 
 /** Registers this device's push token with the backend. Safe to call repeatedly. */
 export async function syncPushToken(): Promise<void> {
   try {
+    if (Platform.OS === "web") {
+      await syncExistingWebPush();
+      return;
+    }
     const registration = await getPushToken();
     if (!registration) return;
     await api("/notifications/register-device", {
@@ -97,4 +101,81 @@ export async function syncPushToken(): Promise<void> {
   } catch {
     // Push is best-effort; never block the app on it.
   }
+}
+
+async function syncExistingWebPush(): Promise<void> {
+  if (!("Notification" in window) || Notification.permission !== "granted" || !("serviceWorker" in navigator)) return;
+  const registration = await navigator.serviceWorker.getRegistration("/");
+  const subscription = await registration?.pushManager?.getSubscription();
+  if (!subscription) return;
+  await api("/notifications/web-push/subscribe", {
+    method: "POST",
+    body: subscription.toJSON(),
+  });
+}
+
+function decodeBase64Url(value: string): Uint8Array {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+  const raw = atob(padded);
+  return Uint8Array.from(raw, (character) => character.charCodeAt(0));
+}
+
+function isIosDevice(): boolean {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function isInstalledWebApp(): boolean {
+  return window.matchMedia("(display-mode: standalone)").matches ||
+    ("standalone" in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone));
+}
+
+export async function getWebPushEnabled(): Promise<boolean> {
+  if (Platform.OS !== "web" || !("serviceWorker" in navigator)) return false;
+  const registration = await navigator.serviceWorker.getRegistration("/");
+  return Boolean(await registration?.pushManager?.getSubscription());
+}
+
+export async function enableWebPush(): Promise<void> {
+  if (Platform.OS !== "web" || !("Notification" in window) || !("serviceWorker" in navigator)) {
+    throw new Error("This browser does not support notifications.");
+  }
+  if (isIosDevice() && !isInstalledWebApp()) {
+    throw new Error("On iPhone or iPad, first use Safari’s Share button and choose Add to Home Screen. Then open the installed app and enable notifications here.");
+  }
+  if (!("PushManager" in window)) throw new Error("This browser does not support web push notifications.");
+
+  const permission = Notification.permission === "default"
+    ? await Notification.requestPermission()
+    : Notification.permission;
+  if (permission !== "granted") throw new Error("Notifications are blocked. Allow them in your browser’s site settings, then try again.");
+
+  const { publicKey } = await api<{ publicKey: string }>("/notifications/web-push/config");
+  const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+  const ready = await navigator.serviceWorker.ready;
+  const subscription = await (ready ?? registration).pushManager.getSubscription() ??
+    await (ready ?? registration).pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: decodeBase64Url(publicKey) as BufferSource,
+    });
+  const json = subscription.toJSON();
+  if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) {
+    throw new Error("The browser did not provide a complete notification subscription. Please try again.");
+  }
+  await api("/notifications/web-push/subscribe", {
+    method: "POST",
+    body: { endpoint: json.endpoint, keys: json.keys },
+  });
+}
+
+export async function disableWebPush(): Promise<void> {
+  if (Platform.OS !== "web" || !("serviceWorker" in navigator)) return;
+  const registration = await navigator.serviceWorker.getRegistration("/");
+  const subscription = await registration?.pushManager?.getSubscription();
+  if (!subscription) return;
+  await api("/notifications/web-push/subscribe", {
+    method: "DELETE",
+    body: { endpoint: subscription.endpoint },
+  });
+  await subscription.unsubscribe();
 }

@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from "../middleware/auth";
 import { requireTenant } from "../middleware/tenant";
 import { parsePagination } from "../lib/pagination";
 import { getStudentForUser, getParentStudentIds } from "../lib/scope";
+import { reconcileAdvanceFees } from "../lib/advanceFees";
 
 async function scopedStudentIds(user: Request["user"]): Promise<string[] | null> {
   if (!user) return [];
@@ -45,6 +46,19 @@ invoicesRouter.get(
         ...(status ? { status } : {}),
       };
 
+      const studentIdsToReconcile = scoped
+        ? scoped
+        : studentId
+          ? [studentId]
+          : (await prisma.advanceFee.findMany({
+              where: { tenantId },
+              select: { studentId: true },
+              distinct: ["studentId"],
+            })).map((row) => row.studentId);
+      await prisma.$transaction(async (tx) => {
+        for (const id of studentIdsToReconcile) await reconcileAdvanceFees(tx, tenantId, id);
+      });
+
       const [total, invoices] = await Promise.all([
         prisma.invoice.count({ where }),
         prisma.invoice.findMany({
@@ -65,7 +79,35 @@ invoicesRouter.get(
           },
         }),
       ]);
-      res.json({ invoices, page, total });
+      const invoiceStudentIds = [...new Set(invoices.map((invoice) => invoice.studentId))];
+      const [advanceTotals, appliedTotals] = invoiceStudentIds.length
+        ? await Promise.all([
+            prisma.advanceFee.groupBy({
+              by: ["studentId"],
+              where: { tenantId, studentId: { in: invoiceStudentIds } },
+              _sum: { amount: true },
+            }),
+            prisma.invoice.groupBy({
+              by: ["studentId"],
+              where: { tenantId, studentId: { in: invoiceStudentIds }, status: { not: "CANCELLED" } },
+              _sum: { advanceApplied: true },
+            }),
+          ])
+        : [[], []];
+      const advanceByStudent = new Map(advanceTotals.map((row) => [row.studentId, row._sum.amount ?? 0]));
+      const appliedByStudent = new Map(appliedTotals.map((row) => [row.studentId, row._sum.advanceApplied ?? 0]));
+      res.json({
+        invoices: invoices.map((invoice) => ({
+          ...invoice,
+          advanceTotal: advanceByStudent.get(invoice.studentId) ?? 0,
+          advanceBalance: Math.max(
+            (advanceByStudent.get(invoice.studentId) ?? 0) - (appliedByStudent.get(invoice.studentId) ?? 0),
+            0
+          ),
+        })),
+        page,
+        total,
+      });
     } catch (err) {
       next(err);
     }
@@ -93,7 +135,11 @@ invoicesRouter.post("/", requireRole("OWNER"), async (req, res, next) => {
       res.status(400).json({ error: "Invalid student" });
       return;
     }
-    const invoice = await prisma.invoice.create({ data: { ...body, tenantId } });
+    const invoice = await prisma.$transaction(async (tx) => {
+      const created = await tx.invoice.create({ data: { ...body, tenantId } });
+      await reconcileAdvanceFees(tx, tenantId, student.id);
+      return tx.invoice.findUnique({ where: { id: created.id } });
+    });
     res.status(201).json({ invoice });
   } catch (err) {
     next(err);
@@ -118,7 +164,12 @@ invoicesRouter.patch("/:id", requireRole("OWNER"), async (req, res, next) => {
         status: z.enum(["PENDING", "PARTIAL", "PAID", "OVERDUE", "CANCELLED"]).optional(),
       })
       .parse(req.body);
-    const invoice = await prisma.invoice.update({ where: { id: existing.id }, data: body });
+    const invoice = await prisma.$transaction(async (tx) => {
+      await reconcileAdvanceFees(tx, tenantId, existing.studentId);
+      await tx.invoice.update({ where: { id: existing.id }, data: body });
+      await reconcileAdvanceFees(tx, tenantId, existing.studentId);
+      return tx.invoice.findUnique({ where: { id: existing.id } });
+    });
     res.json({ invoice });
   } catch (err) {
     next(err);
@@ -134,7 +185,11 @@ invoicesRouter.delete("/:id", requireRole("OWNER"), async (req, res, next) => {
       res.status(404).json({ error: "Not found" });
       return;
     }
-    await prisma.invoice.delete({ where: { id: existing.id } });
+    await prisma.$transaction(async (tx) => {
+      await reconcileAdvanceFees(tx, req.user!.tenantId!, existing.studentId);
+      await tx.invoice.delete({ where: { id: existing.id } });
+      await reconcileAdvanceFees(tx, req.user!.tenantId!, existing.studentId);
+    });
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -187,9 +242,14 @@ invoicesRouter.post("/:id/items", requireRole("OWNER"), async (req, res, next) =
     const paid = existing.payments.reduce((sum, p) => sum + p.amount, 0);
     const status = paid >= amount ? "PAID" : paid > 0 ? "PARTIAL" : "PENDING";
 
-    const invoice = await prisma.invoice.update({
-      where: { id: existing.id },
-      data: { items: items as Prisma.InputJsonValue, amount, status },
+    const invoice = await prisma.$transaction(async (tx) => {
+      await reconcileAdvanceFees(tx, tenantId, existing.studentId);
+      await tx.invoice.update({
+        where: { id: existing.id },
+        data: { items: items as Prisma.InputJsonValue, amount, status },
+      });
+      await reconcileAdvanceFees(tx, tenantId, existing.studentId);
+      return tx.invoice.findUnique({ where: { id: existing.id } });
     });
     res.status(201).json({ invoice });
   } catch (err) {
@@ -223,13 +283,18 @@ invoicesRouter.delete("/:id/items/:index", requireRole("OWNER"), async (req, res
       return;
     }
     const status = paid >= amount ? "PAID" : paid > 0 ? "PARTIAL" : "PENDING";
-    const invoice = await prisma.invoice.update({
-      where: { id: existing.id },
-      data: {
-        items: (nextItems.length ? nextItems : null) as Prisma.InputJsonValue,
-        amount,
-        status,
-      },
+    const invoice = await prisma.$transaction(async (tx) => {
+      await reconcileAdvanceFees(tx, tenantId, existing.studentId);
+      await tx.invoice.update({
+        where: { id: existing.id },
+        data: {
+          items: (nextItems.length ? nextItems : null) as Prisma.InputJsonValue,
+          amount,
+          status,
+        },
+      });
+      await reconcileAdvanceFees(tx, tenantId, existing.studentId);
+      return tx.invoice.findUnique({ where: { id: existing.id } });
     });
     res.json({ invoice });
   } catch (err) {
@@ -292,53 +357,59 @@ paymentsRouter.post("/", requireRole("OWNER"), async (req, res, next) => {
       return;
     }
 
-    let invoice: { id: string; title: string; amount: number } | null = null;
-    if (body.invoiceId) {
-      const found = await prisma.invoice.findFirst({
-        where: { id: body.invoiceId, tenantId },
-      });
-      if (!found) {
-        res.status(400).json({ error: "Invalid invoice" });
-        return;
-      }
-      const agg = await prisma.payment.aggregate({
-        where: { invoiceId: found.id },
-        _sum: { amount: true },
-      });
-      const outstanding = found.amount - (agg._sum.amount ?? 0);
-      if (body.amount > outstanding) {
-        res.status(400).json({
-          error: `Amount exceeds the outstanding balance of ${outstanding}`,
+    const result = await prisma.$transaction(async (tx) => {
+      let invoice: { id: string; studentId: string; title: string; amount: number; advanceApplied: number } | null = null;
+      if (body.invoiceId) {
+        const before = await tx.invoice.findFirst({
+          where: { id: body.invoiceId, tenantId },
+          select: { studentId: true },
         });
-        return;
+        if (!before) return { error: "Invalid invoice" as const };
+        await reconcileAdvanceFees(tx, tenantId, before.studentId);
+        const found = await tx.invoice.findFirst({ where: { id: body.invoiceId, tenantId } });
+        if (!found) return { error: "Invalid invoice" as const };
+        const agg = await tx.payment.aggregate({
+          where: { invoiceId: found.id },
+          _sum: { amount: true },
+        });
+        const outstanding = found.amount - (agg._sum.amount ?? 0) - found.advanceApplied;
+        if (body.amount > outstanding) {
+          return { error: `Amount exceeds the outstanding balance of ${Math.max(outstanding, 0)}` };
+        }
+        invoice = found;
       }
-      invoice = found;
-    }
 
-    // Record the payment and refresh the invoice status atomically.
-    const { payment, invoiceStatus, totalPaid } = await prisma.$transaction(async (tx) => {
       const created = await tx.payment.create({
         data: { ...body, tenantId, recordedById: req.user!.sub },
       });
       let status: "PAID" | "PARTIAL" | "PENDING" | null = null;
       let paid = 0;
+      let outstanding = 0;
       if (invoice) {
+        await reconcileAdvanceFees(tx, tenantId, invoice.studentId);
+        const refreshed = await tx.invoice.findUnique({ where: { id: invoice.id } });
         const agg = await tx.payment.aggregate({
           where: { invoiceId: invoice.id },
           _sum: { amount: true },
         });
-        paid = agg._sum.amount ?? 0;
-        status = paid >= invoice.amount ? "PAID" : paid > 0 ? "PARTIAL" : "PENDING";
-        await tx.invoice.update({ where: { id: invoice.id }, data: { status } });
+        paid = (agg._sum.amount ?? 0) + (refreshed?.advanceApplied ?? 0);
+        outstanding = Math.max((refreshed?.amount ?? invoice.amount) - paid, 0);
+        status = outstanding === 0 ? "PAID" : paid > 0 ? "PARTIAL" : "PENDING";
       }
-      return { payment: created, invoiceStatus: status, totalPaid: paid };
+      return { error: null, payment: created, invoiceStatus: status, totalPaid: paid, outstanding, invoice };
     });
+
+    if (result.error) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    const { payment, invoiceStatus, totalPaid, outstanding, invoice } = result;
 
     // Receipt line shared by the parent and student notifications. Full payments
     // and partial payments get wording that matches the remaining balance.
     const studentName = [student.firstName, student.lastName].filter(Boolean).join(" ");
     const method = body.method ?? "CASH";
-    const remaining = invoice ? Math.max(invoice.amount - totalPaid, 0) : 0;
+    const remaining = invoice ? outstanding : 0;
     const amountText = body.amount.toLocaleString("en-IN");
     const receiptLine =
       `Fees paid for ${studentName}${invoice ? ` — ${invoice.title}` : ""}: ₹${amountText} received via ${method}. ` +

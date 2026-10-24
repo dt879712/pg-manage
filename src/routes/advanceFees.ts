@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from "../middleware/auth";
 import { requireTenant } from "../middleware/tenant";
 import { parsePagination } from "../lib/pagination";
 import { getParentStudentIds, getStudentForUser } from "../lib/scope";
+import { reconcileAdvanceFees } from "../lib/advanceFees";
 
 export const advanceFeesRouter = Router();
 advanceFeesRouter.use(requireAuth, requireTenant);
@@ -39,7 +40,10 @@ advanceFeesRouter.get(
         ...(!scoped && studentId ? { studentId } : {}),
       };
 
-      const [total, records] = await Promise.all([
+      const now = new Date();
+      const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+      const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+      const [total, records, allTimeAmount, thisMonthAmount] = await Promise.all([
         prisma.advanceFee.count({ where }),
         prisma.advanceFee.findMany({
           where,
@@ -65,6 +69,11 @@ advanceFeesRouter.get(
               },
             },
           },
+        }),
+        prisma.advanceFee.aggregate({ where, _sum: { amount: true } }),
+        prisma.advanceFee.aggregate({
+          where: { ...where, paidAt: { gte: monthStart, lt: nextMonthStart } },
+          _sum: { amount: true },
         }),
       ]);
 
@@ -115,7 +124,16 @@ advanceFeesRouter.get(
           .map(({ id, name, email, phone }) => ({ id, name, email, phone }));
       }
 
-      res.json({ advanceFees: records, superParents, page, total });
+      res.json({
+        advanceFees: records,
+        superParents,
+        summary: {
+          allTimeReceived: allTimeAmount._sum.amount ?? 0,
+          thisMonthReceived: thisMonthAmount._sum.amount ?? 0,
+        },
+        page,
+        total,
+      });
     } catch (err) {
       next(err);
     }
@@ -149,19 +167,23 @@ advanceFeesRouter.post("/", requireRole("OWNER"), async (req, res, next) => {
       return;
     }
 
-    const advanceFee = await prisma.advanceFee.create({
-      data: {
-        ...body,
-        paidAt: dateOnly(body.paidAt),
-        paidThrough: dateOnly(body.paidThrough),
-        tenantId,
-        recordedById: req.user!.sub,
-      },
-      include: {
-        student: {
-          select: { id: true, firstName: true, lastName: true, room: { select: { roomNumber: true } } },
+    const advanceFee = await prisma.$transaction(async (tx) => {
+      const created = await tx.advanceFee.create({
+        data: {
+          ...body,
+          paidAt: dateOnly(body.paidAt),
+          paidThrough: dateOnly(body.paidThrough),
+          tenantId,
+          recordedById: req.user!.sub,
         },
-      },
+        include: {
+          student: {
+            select: { id: true, firstName: true, lastName: true, room: { select: { roomNumber: true } } },
+          },
+        },
+      });
+      await reconcileAdvanceFees(tx, tenantId, student.id);
+      return created;
     });
     res.status(201).json({ advanceFee });
   } catch (err) {

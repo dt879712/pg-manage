@@ -1,10 +1,11 @@
-import { useState } from "react";
-import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Button, Card, ErrorText, Muted, Row } from "@/components/ui";
 import { DesktopShell } from "@/components/shell";
 import { useAuth } from "@/lib/auth";
 import { updateUser } from "@/lib/endpoints";
+import { disableWebPush, enableWebPush, getWebPushEnabled } from "@/lib/push";
 import { radius, roleLabels, space } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 
@@ -16,6 +17,12 @@ function ProfileView() {
   const [email, setEmail] = useState(user?.email ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [webPushEnabled, setWebPushEnabled] = useState(false);
+  const [webPushLoading, setWebPushLoading] = useState(false);
+  const [webPushMessage, setWebPushMessage] = useState<string | null>(null);
+  useEffect(() => {
+    if (Platform.OS === "web") void getWebPushEnabled().then(setWebPushEnabled).catch(() => {});
+  }, []);
   if (!user) return null;
 
   const save = async () => {
@@ -34,6 +41,26 @@ function ProfileView() {
       setError(e instanceof Error ? e.message : "Could not update email");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const changeWebPush = async () => {
+    setWebPushLoading(true);
+    setWebPushMessage(null);
+    try {
+      if (webPushEnabled) {
+        await disableWebPush();
+        setWebPushEnabled(false);
+        setWebPushMessage("Browser notifications are turned off.");
+      } else {
+        await enableWebPush();
+        setWebPushEnabled(true);
+        setWebPushMessage("Notifications are enabled on this device.");
+      }
+    } catch (e) {
+      setWebPushMessage(e instanceof Error ? e.message : "Could not update notification settings.");
+    } finally {
+      setWebPushLoading(false);
     }
   };
 
@@ -56,6 +83,24 @@ function ProfileView() {
         <Text style={{ fontSize: 18, fontWeight: "700", color: colors.text }}>{user.name}</Text>
         <Text style={{ color: colors.muted }}>{roleLabels[user.role] ?? user.role}</Text>
       </Card>
+
+      {Platform.OS === "web" ? (
+        <Card style={{ gap: space(3) }}>
+          <Text style={{ fontWeight: "700", color: colors.text }}>Browser notifications</Text>
+          <Muted>
+            Get alerts for new announcements and other app notifications on this device.
+          </Muted>
+          {webPushMessage ? <Muted>{webPushMessage}</Muted> : null}
+          <Button
+            label={webPushEnabled ? "Turn off notifications" : "Enable notifications"}
+            variant={webPushEnabled ? "ghost" : "primary"}
+            size="sm"
+            icon={webPushEnabled ? "notifications-off-outline" : "notifications-outline"}
+            onPress={changeWebPush}
+            loading={webPushLoading}
+          />
+        </Card>
+      ) : null}
 
       <Card style={{ gap: space(3) }}>
         {editing ? (
