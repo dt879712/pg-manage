@@ -2,6 +2,7 @@ import * as Print from "expo-print";
 import { WebView } from "react-native-webview";
 import { useState } from "react";
 import { Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useRouter } from "expo-router";
 import { Badge, Button, Empty, ErrorText, Muted, Row, SkeletonRows, Stat, statusTone } from "@/components/ui";
 import { DesktopShell } from "@/components/shell";
 import { TopBar } from "@/components/topbar";
@@ -24,6 +25,7 @@ type Tab = "COLLECTED" | "DUE";
 function FeesView() {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const router = useRouter();
   const isOwner = user?.role === "OWNER";
   const { data, loading, error, reload } = useApi<{ invoices: Invoice[]; total: number }>("/invoices?take=100");
   const { data: tenantData } = useApi<{ tenant: TenantBranding }>("/tenant");
@@ -234,6 +236,10 @@ function FeesView() {
   return (
     <>
       <ScrollView contentContainerStyle={{ padding: space(4), gap: space(3) }}>
+      <Row between style={{ flexWrap: "wrap" }}>
+        <Text style={{ color: colors.text, fontWeight: "800", fontSize: 18 }}>Fees</Text>
+        <Button label="Ad-Fees" variant="ghost" size="sm" icon="arrow-forward" onPress={() => router.push("/(tabs)/ad-fees")} />
+      </Row>
       {!isOwner ? <PaymentInfo tenant={tenantData?.tenant} /> : null}
       <ErrorText>{error || err}</ErrorText>
       <Row style={{ gap: space(3) }}>

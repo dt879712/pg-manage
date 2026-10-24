@@ -72,6 +72,14 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="ad-fees"
+        options={{
+          title: "Ad-Fees",
+          href: null,
+          tabBarIcon: ({ color, size }) => <Ionicons name="calendar-outline" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
         name="leaves"
         options={{
           title: "Leaves",

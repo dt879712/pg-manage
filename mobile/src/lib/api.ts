@@ -75,18 +75,38 @@ export function getToken(): string | null {
   return token;
 }
 
+type ApiErrorData = {
+  canReset?: boolean;
+  error?: string;
+  details?: {
+    formErrors?: unknown;
+    fieldErrors?: Record<string, unknown>;
+  };
+};
+
 export class ApiError extends Error {
   status: number;
-  data: { canReset?: boolean; error?: string } | null;
-  constructor(
-    message: string,
-    status: number,
-    data: { canReset?: boolean; error?: string } | null = null
-  ) {
+  data: ApiErrorData | null;
+  constructor(message: string, status: number, data: ApiErrorData | null = null) {
     super(message);
     this.status = status;
     this.data = data;
   }
+}
+
+function validationMessage(details: ApiErrorData["details"] | undefined): string | null {
+  if (!details) return null;
+
+  const fieldErrors = Object.entries(details.fieldErrors ?? {}).flatMap(([field, rawMessages]) => {
+    const messages = Array.isArray(rawMessages) ? rawMessages.filter((item): item is string => typeof item === "string") : [];
+    const label = field.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/^./, (letter) => letter.toUpperCase());
+    return messages.map((message) => `${label}: ${message}`);
+  });
+  const formErrors = Array.isArray(details.formErrors)
+    ? details.formErrors.filter((item): item is string => typeof item === "string")
+    : [];
+  const messages = [...fieldErrors, ...formErrors];
+  return messages.length ? messages.join(" ") : null;
 }
 
 interface ApiOptions {
@@ -141,7 +161,11 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) {
-    throw new ApiError(data?.error ?? `Request failed (${res.status})`, res.status, data);
+    const message =
+      data?.error === "Validation failed"
+        ? validationMessage(data.details) ?? data.error
+        : data?.error ?? `Request failed (${res.status})`;
+    throw new ApiError(message, res.status, data);
   }
   return data as T;
 }

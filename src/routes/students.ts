@@ -35,6 +35,8 @@ const studentBody = z.object({
 const studentCreateBody = studentBody.extend({
   paidForCurrentMonth: z.boolean().optional(),
   paidAmount: z.number().int().positive().optional(),
+  advanceFeeAmount: z.number().int().positive().optional(),
+  advanceFeePaidThrough: z.coerce.date().optional(),
   // Optional logins created together with the student. When supplied, the
   // student and guardian accounts are created and linked in the same step.
   studentEmail: z.string().email().optional(),
@@ -133,6 +135,21 @@ studentsRouter.post("/", async (req, res, next) => {
   try {
     const tenantId = req.user!.tenantId!;
     const body = studentCreateBody.parse(req.body);
+
+    if (Boolean(body.advanceFeeAmount) !== Boolean(body.advanceFeePaidThrough)) {
+      res.status(400).json({ error: "Enter both the advance-fee amount and its paid-through date." });
+      return;
+    }
+    if (body.advanceFeePaidThrough) {
+      const paidThroughDay = new Date(body.advanceFeePaidThrough);
+      paidThroughDay.setUTCHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      if (paidThroughDay < today) {
+        res.status(400).json({ error: "Advance-fee paid-through date must be today or later." });
+        return;
+      }
+    }
 
     // Login identifiers must be unique across all accounts (a mobile number or
     // email resolves to exactly one account). Reject clashes up front with a
@@ -276,6 +293,20 @@ studentsRouter.post("/", async (req, res, next) => {
             parentUserId: parentUser.id,
             studentId: created.id,
             relation: "Guardian",
+          },
+        });
+      }
+
+      if (body.advanceFeeAmount && body.advanceFeePaidThrough) {
+        await tx.advanceFee.create({
+          data: {
+            tenantId,
+            studentId: created.id,
+            amount: body.advanceFeeAmount,
+            paidAt: new Date(),
+            paidThrough: body.advanceFeePaidThrough,
+            note: "Advance fee on admission",
+            recordedById: req.user!.sub,
           },
         });
       }

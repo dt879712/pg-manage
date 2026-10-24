@@ -134,7 +134,7 @@ export default function UserDetailScreen() {
           <Text style={{ fontWeight: "700", color: colors.text }}>Super parent</Text>
           <Muted>
             Super parents are targeted by the &quot;Super parents&quot; notification. Auto marks
-            them super when their child has paid a future month in advance.
+            them super when their child has a paid future month or an Ad-Fee paid through a future date.
           </Muted>
           <Row style={{ gap: space(2) }}>
             {(

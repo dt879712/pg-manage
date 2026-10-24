@@ -136,6 +136,30 @@ export interface Payment {
   paidAt: string;
 }
 
+export interface AdvanceFee {
+  id: string;
+  studentId: string;
+  amount: number;
+  method: string;
+  paidAt: string;
+  paidThrough: string;
+  note?: string | null;
+  student?: {
+    id: string;
+    firstName: string;
+    lastName?: string | null;
+    room?: { roomNumber: string } | null;
+    parents?: { parent: { id: string; name: string; isSuperParent?: boolean | null } }[];
+  } | null;
+}
+
+export interface SuperParentSummary {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+}
+
 export interface RosterStudent {
   id: string;
   firstName: string;

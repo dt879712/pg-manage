@@ -27,9 +27,8 @@ const AUDIENCE_ENUM = z.enum([
   "SUPER_PARENTS",
 ]);
 
-// "Super parents" = parents whose child has an invoice for a future month
-// (periodMonth/periodYear) that is already fully PAID, i.e. fees paid in
-// advance. The owner can override this per parent via User.isSuperParent
+// "Super parents" = parents whose child has a fully-paid future-month invoice
+// or an advance-fee payment with a current/future paid-through date. The owner can override this per parent via User.isSuperParent
 // (true = always super, false = always normal, null = auto).
 async function superParentUsers(tenantId: string): Promise<{ id: string }[]> {
   const parents = await prisma.user.findMany({
@@ -38,25 +37,31 @@ async function superParentUsers(tenantId: string): Promise<{ id: string }[]> {
   });
   if (!parents.length) return [];
 
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const year = today.getUTCFullYear();
+  const month = today.getUTCMonth() + 1;
 
   const autoLinks = await prisma.parentStudent.findMany({
     where: {
       tenantId,
       student: {
-        invoices: {
-          some: {
-            tenantId,
-            status: "PAID",
-            periodYear: { not: null },
-            OR: [
-              { periodYear: { gt: year } },
-              { periodYear: year, periodMonth: { gt: month } },
-            ],
+        OR: [
+          {
+            invoices: {
+              some: {
+                tenantId,
+                status: "PAID",
+                periodYear: { not: null },
+                OR: [
+                  { periodYear: { gt: year } },
+                  { periodYear: year, periodMonth: { gt: month } },
+                ],
+              },
+            },
           },
-        },
+          { advanceFees: { some: { tenantId, paidThrough: { gte: today } } } },
+        ],
       },
     },
     select: { parentUserId: true },

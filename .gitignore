@@ -8,3 +8,4 @@ dist/
 *.log
 .firebase/
 .DS_Store
+store/testers.csv

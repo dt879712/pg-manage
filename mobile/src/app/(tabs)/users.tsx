@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
   Badge,
@@ -32,7 +32,9 @@ const roleTone: Record<Role, Tone> = {
 
 function UsersView() {
   const { colors } = useTheme();
+  const { width } = useWindowDimensions();
   const router = useRouter();
+  const compact = width < 420;
   const input = [
     inputStyle,
     { borderColor: colors.border, color: colors.text, backgroundColor: colors.bg },
@@ -255,11 +257,19 @@ function UsersView() {
               <Text style={{ color: colors.danger, fontSize: 13, fontWeight: "600" }}>Disabled</Text>
             )}
           </Row>
-          <Row style={{ gap: space(2), flexWrap: "wrap" }}>
+          <Row
+            style={{
+              gap: space(2),
+              flexWrap: "wrap",
+              flexDirection: compact ? "column" : "row",
+              alignItems: compact ? "stretch" : "center",
+            }}
+          >
             <Button
               label="Set password"
               variant="ghost"
-              size="sm"
+              size={compact ? "md" : "sm"}
+              block={compact}
               onPress={() => {
                 setResetFor(u);
                 setResetPw("");
@@ -268,8 +278,9 @@ function UsersView() {
             {u.role !== "OWNER" ? (
               <Button
                 label="Delete"
-                variant="ghost"
-                size="sm"
+                variant="danger"
+                size={compact ? "md" : "sm"}
+                block={compact}
                 icon="trash-outline"
                 loading={busy === u.id}
                 onPress={() => remove(u)}

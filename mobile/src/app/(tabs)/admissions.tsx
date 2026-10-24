@@ -32,6 +32,16 @@ import { useTheme } from "@/lib/theme-context";
 import type { Admission, Pg, Room } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
 
+function parseAmount(value: string): number {
+  return Math.max(0, parseInt(value.replace(/\D/g, ""), 10) || 0);
+}
+
+function isValidDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
 function AdmissionsView() {
   const { colors } = useTheme();
   const [filter, setFilter] = useState<"PENDING" | "ALL">("PENDING");
@@ -146,6 +156,9 @@ function AdmissionDetail({
   const [bedId, setBedId] = useState<string | null>(null);
   const [fee, setFee] = useState("");
   const [paidNow, setPaidNow] = useState("");
+  const [paidThisMonth, setPaidThisMonth] = useState(false);
+  const [advanceFeeAmount, setAdvanceFeeAmount] = useState("");
+  const [advanceFeePaidThrough, setAdvanceFeePaidThrough] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<null | "approve" | "reject">(null);
   const [err, setErr] = useState<string | null>(null);
@@ -160,6 +173,20 @@ function AdmissionDetail({
   const effectivePg = targetPg ?? sourcePgId;
 
   const approve = async () => {
+    const paidAmount = parseAmount(paidNow);
+    const advanceAmount = parseAmount(advanceFeeAmount);
+    if ((paidThisMonth || paidAmount > 0) && parseAmount(fee) <= 0) {
+      setErr("Enter the monthly fee before recording a payment for this month.");
+      return;
+    }
+    if ((advanceAmount > 0) !== Boolean(advanceFeePaidThrough.trim())) {
+      setErr("Enter both the Ad-Fee amount and its paid-through date.");
+      return;
+    }
+    if (advanceFeePaidThrough.trim() && !isValidDate(advanceFeePaidThrough.trim())) {
+      setErr("Enter the Ad-Fee paid-through date as YYYY-MM-DD.");
+      return;
+    }
     setBusy("approve");
     setErr(null);
     try {
@@ -167,13 +194,11 @@ function AdmissionDetail({
         tenantId: effectivePg ?? undefined,
         roomId: roomId ?? undefined,
         bedId: bedId ?? undefined,
-        monthlyFee: fee.trim() ? Math.max(0, parseInt(fee.replace(/\D/g, ""), 10) || 0) : undefined,
-        paidForCurrentMonth: paidNow.trim()
-          ? Math.max(0, parseInt(paidNow.replace(/\D/g, ""), 10) || 0) > 0
-          : false,
-        paidAmount: paidNow.trim()
-          ? Math.max(0, parseInt(paidNow.replace(/\D/g, ""), 10) || 0)
-          : undefined,
+        monthlyFee: fee.trim() ? parseAmount(fee) : undefined,
+        paidForCurrentMonth: paidThisMonth || paidAmount > 0,
+        paidAmount: paidAmount > 0 ? paidAmount : undefined,
+        advanceFeeAmount: advanceAmount > 0 ? advanceAmount : undefined,
+        advanceFeePaidThrough: advanceAmount > 0 ? advanceFeePaidThrough.trim() : undefined,
       });
       onDone();
     } catch (e) {
@@ -341,7 +366,13 @@ function AdmissionDetail({
                     </Text>
                     <TextInput
                       value={fee}
-                      onChangeText={setFee}
+                      onChangeText={(value) => {
+                        setFee(value);
+                        if (parseAmount(value) <= 0) {
+                          setPaidThisMonth(false);
+                          setPaidNow("");
+                        }
+                      }}
                       placeholder="e.g. 7000"
                       placeholderTextColor={colors.muted}
                       keyboardType="number-pad"
@@ -351,9 +382,35 @@ function AdmissionDetail({
                       ]}
                     />
                     <Muted style={{ fontSize: 12 }}>Charged per student. Picking a room prefills its rent.</Muted>
+                    <Pressable
+                      disabled={parseAmount(fee) <= 0}
+                      onPress={() => setPaidThisMonth((current) => !current)}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: space(2),
+                        opacity: parseAmount(fee) > 0 ? 1 : 0.5,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderWidth: 1,
+                          borderRadius: radius.sm,
+                          borderColor: paidThisMonth ? colors.primary : colors.border,
+                          backgroundColor: paidThisMonth ? colors.primary : colors.bg,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {paidThisMonth ? <Text style={{ color: colors.onPrimary, fontWeight: "800" }}>✓</Text> : null}
+                      </View>
+                      <Text style={{ flex: 1, color: colors.text, fontWeight: "600" }}>Mark this month&apos;s fee paid in full</Text>
+                    </Pressable>
                     <View style={{ gap: 4 }}>
                       <Text style={{ color: colors.text, fontWeight: "600", fontSize: 13 }}>
-                        Paid now (₹)
+                        Amount received this month (₹)
                       </Text>
                       <TextInput
                         value={paidNow}
@@ -369,10 +426,32 @@ function AdmissionDetail({
                         ]}
                       />
                       <Muted style={{ fontSize: 12 }}>
-                        First month&apos;s fee is added to the due list automatically. Part payments keep
-                        the remaining balance due.
+                        First month&apos;s fee is added to the due list automatically. Enter a partial amount here, or leave it blank when marking the month paid in full.
                       </Muted>
                     </View>
+                  </View>
+                  <View style={{ gap: space(2), borderTopWidth: 1, borderTopColor: colors.border, paddingTop: space(3) }}>
+                    <Text style={{ color: colors.text, fontWeight: "700" }}>Ad-Fees (advance payment)</Text>
+                    <Muted style={{ fontSize: 12 }}>
+                      This is saved separately from the monthly fee. A linked parent is automatically included as a super parent while the paid-through date is current or future.
+                    </Muted>
+                    <TextInput
+                      value={advanceFeeAmount}
+                      onChangeText={setAdvanceFeeAmount}
+                      placeholder="Advance amount (₹)"
+                      placeholderTextColor={colors.muted}
+                      keyboardType="number-pad"
+                      style={[inputStyle, { borderColor: colors.border, color: colors.text, backgroundColor: colors.bg }]}
+                    />
+                    <TextInput
+                      value={advanceFeePaidThrough}
+                      onChangeText={setAdvanceFeePaidThrough}
+                      placeholder="Paid through date (YYYY-MM-DD)"
+                      placeholderTextColor={colors.muted}
+                      autoCapitalize="none"
+                      style={[inputStyle, { borderColor: colors.border, color: colors.text, backgroundColor: colors.bg }]}
+                    />
+                    <Muted style={{ fontSize: 12 }}>Enter both the amount and the last date covered. Leave both blank if no advance fee was paid.</Muted>
                   </View>
                   <Muted style={{ fontSize: 12 }}>
                     Room only = allot whole room; pick a bed for shared rooms. Student gets notified on approval.

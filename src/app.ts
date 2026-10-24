@@ -16,6 +16,7 @@ import { admissionsRouter } from "./routes/admissions";
 import { leavesRouter } from "./routes/leaves";
 import { messagesRouter } from "./routes/messages";
 import { statusVideosRouter } from "./routes/statusVideos";
+import { advanceFeesRouter } from "./routes/advanceFees";
 
 export function createApp() {
   const app = express();
@@ -38,6 +39,7 @@ export function createApp() {
   app.use("/attendance", attendanceRouter);
   app.use("/invoices", invoicesRouter);
   app.use("/payments", paymentsRouter);
+  app.use("/advance-fees", advanceFeesRouter);
   app.use("/users", usersRouter);
   app.use("/documents", documentsRouter);
   app.use("/tenant", tenantRouter);

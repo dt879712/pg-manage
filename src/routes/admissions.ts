@@ -315,8 +315,25 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
         monthlyFee: z.number().int().nonnegative().optional(),
         paidForCurrentMonth: z.boolean().optional(),
         paidAmount: z.number().int().positive().optional(),
+        advanceFeeAmount: z.number().int().positive().optional(),
+        advanceFeePaidThrough: z.coerce.date().optional(),
       })
       .parse(req.body ?? {});
+
+    if (Boolean(body.advanceFeeAmount) !== Boolean(body.advanceFeePaidThrough)) {
+      res.status(400).json({ error: "Enter both the advance-fee amount and its paid-through date." });
+      return;
+    }
+    if (body.advanceFeePaidThrough) {
+      const paidThroughDay = new Date(body.advanceFeePaidThrough);
+      paidThroughDay.setUTCHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      if (paidThroughDay < today) {
+        res.status(400).json({ error: "Advance-fee paid-through date must be today or later." });
+        return;
+      }
+    }
 
     const tenantIds = await ownedTenantIds(req.user!.sub);
     const request = await prisma.admissionRequest.findFirst({
@@ -475,6 +492,19 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
             },
           });
         }
+      }
+      if (body.advanceFeeAmount && body.advanceFeePaidThrough) {
+        await tx.advanceFee.create({
+          data: {
+            tenantId,
+            studentId: created.id,
+            amount: body.advanceFeeAmount,
+            paidAt: new Date(),
+            paidThrough: body.advanceFeePaidThrough,
+            note: "Advance fee on admission",
+            recordedById: req.user!.sub,
+          },
+        });
       }
       return created;
     });

@@ -155,6 +155,7 @@ model Tenant {
   attendances   Attendance[]
   invoices      Invoice[]
   payments      Payment[]
+  advanceFees   AdvanceFee[]
   documents     Document[]
   notifications Notification[]
   auditLogs     AuditLog[]
@@ -192,8 +193,8 @@ model User {
   passwordHash String
   role         Role     @default(STUDENT)
   isActive     Boolean  @default(true)
-  // Super-parent override for PARENT users: null = auto (detected from fees
-  // paid for a future month), true = always super, false = always normal.
+  // Super-parent override for PARENT users: null = auto (future-month fee or
+  // advance payment through a future date), true = always super, false = normal.
   isSuperParent Boolean?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -204,6 +205,7 @@ model User {
   createdStudents      Student[]           @relation("StudentCreator")
   recordedAttendances  Attendance[]        @relation("AttendanceRecorder")
   recordedPayments     Payment[]           @relation("PaymentRecorder")
+  recordedAdvanceFees  AdvanceFee[]        @relation("AdvanceFeeRecorder")
   uploadedDocuments    Document[]          @relation("DocumentUploader")
   documents            Document[]          @relation("UserDocuments")
   createdNotifications Notification[]      @relation("NotificationCreator")
@@ -329,6 +331,7 @@ model Student {
   attendances Attendance[]
   invoices    Invoice[]
   payments    Payment[]
+  advanceFees AdvanceFee[]
   documents   Document[]
   admissionRequest AdmissionRequest?
   leaveRequests LeaveRequest[]
@@ -450,6 +453,28 @@ model Payment {
   @@index([studentId])
   @@index([invoiceId])
   @@map("payments")
+}
+
+// Advance-fee payments stay separate from monthly invoices and payments.
+model AdvanceFee {
+  id           String        @id @default(cuid())
+  tenantId     String
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  amount       Int
+  method       PaymentMethod @default(CASH)
+  paidAt       DateTime      @default(now())
+  paidThrough  DateTime
+  note         String?
+  recordedById String?
+  recordedBy   User?         @relation("AdvanceFeeRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime      @default(now())
+
+  @@index([tenantId])
+  @@index([studentId])
+  @@index([paidThrough])
+  @@map("advance_fees")
 }
 
 // ---------------------------------------------------------------------------

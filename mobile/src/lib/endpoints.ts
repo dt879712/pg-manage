@@ -1,5 +1,6 @@
 import { api } from "./api";
 import type {
+  AdvanceFee,
   Admission,
   AdmissionStatusResult,
   AppNotification,
@@ -18,6 +19,7 @@ import type {
   Room,
   StatusVideo,
   Student,
+  SuperParentSummary,
   TenantBranding,
   TenantImage,
   UserDetail,
@@ -134,6 +136,8 @@ export interface CreateStudentInput {
   monthlyFee?: number;
   paidForCurrentMonth?: boolean;
   paidAmount?: number;
+  advanceFeeAmount?: number;
+  advanceFeePaidThrough?: string;
   photoUrl?: string;
   roomId?: string;
   bedId?: string;
@@ -293,6 +297,8 @@ export function approveAdmission(
     monthlyFee?: number;
     paidForCurrentMonth?: boolean;
     paidAmount?: number;
+    advanceFeeAmount?: number;
+    advanceFeePaidThrough?: string;
   }
 ) {
   return api<{ ok: boolean; studentId: string }>(`/admissions/${id}/approve`, {
@@ -416,6 +422,27 @@ export function createPayment(input: {
     studentNotified: number;
     outstanding: number;
   }>("/payments", { method: "POST", body: input });
+}
+
+export function getAdvanceFees() {
+  return api<{ advanceFees: AdvanceFee[]; superParents: SuperParentSummary[]; total: number }>(
+    "/advance-fees?take=100"
+  );
+}
+
+export function createAdvanceFee(input: {
+  studentId: string;
+  amount: number;
+  method: "CASH" | "UPI" | "CARD" | "BANK_TRANSFER" | "OTHER";
+  paidAt: string;
+  paidThrough: string;
+  note?: string;
+}) {
+  return api<{ advanceFee: AdvanceFee }>("/advance-fees", { method: "POST", body: input });
+}
+
+export function getStudentsForAdvanceFees() {
+  return api<{ students: Student[]; total: number }>("/students?take=100");
 }
 
 export function addInvoiceItem(invoiceId: string, input: { label: string; amount: number }) {
