@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { requireTenant } from "../middleware/tenant";
-import { storeMedia, resolveMediaUrl, deleteMedia } from "../lib/fileStore";
+import { resolveMediaUrl, deleteMedia, validateCloudinaryRef } from "../lib/fileStore";
 import { getStudentForUser, getParentStudentIds } from "../lib/scope";
 
 export const documentsRouter = Router();
@@ -18,7 +18,7 @@ const docBody = z.object({
   type: z.enum(["ID_PROOF", "PHOTO", "AGREEMENT", "OTHER"]).optional(),
   title: z.string().optional(),
   side: z.enum(["front", "back"]).optional(),
-  dataUrl: z.string().min(1),
+  fileUrl: z.string().min(1),
   mimeType: z.string().optional(),
 });
 
@@ -134,20 +134,11 @@ documentsRouter.post(
     }
 
     const scope = body.studentId ? `student/${body.studentId}` : `user/${body.userId}`;
-    let stored;
-    try {
-      stored = await storeMedia(tenantId, body.dataUrl, body.mimeType, {
-        kind: "image",
-        folder: `documents/${scope}`,
-      });
-    } catch (err) {
-      const status = (err as { status?: number }).status;
-      if (status) {
-        res.status(status).json({ error: (err as Error).message });
-        return;
-      }
-      throw err;
-    }
+    const fileUrl = validateCloudinaryRef(
+      body.fileUrl,
+      `documents/${scope}/${tenantId}`,
+      "image"
+    );
 
     const document = await prisma.document.create({
       data: {
@@ -157,8 +148,8 @@ documentsRouter.post(
         type: body.type ?? "OTHER",
         title: body.title,
         side: body.side,
-        fileUrl: stored.fileUrl,
-        mimeType: stored.mimeType,
+        fileUrl,
+        mimeType: body.mimeType,
         uploadedById: req.user!.sub,
       },
     });

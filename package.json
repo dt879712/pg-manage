@@ -10,7 +10,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "media:migrate-inline": "tsx src/migrateInlineMedia.ts"
   },
   "dependencies": {
     "@prisma/client": "5.22.0",

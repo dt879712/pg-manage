@@ -67,25 +67,12 @@ export default function NewStudent() {
   const beds = selected?.beds ?? [];
 
   const submit = async () => {
-    if (studentLoginId.trim() && studentLoginPass.trim().length < 6) {
-      setErr("Student password must be at least 6 characters.");
-      return;
-    }
-    if (parentLoginId.trim() && parentLoginPass.trim().length < 6) {
-      setErr("Parent password must be at least 6 characters.");
-      return;
-    }
     const paidAmount = parseAmount(paidNow);
     const advanceAmount = parseAmount(advanceFeeAmount);
-    if ((paidThisMonth || paidAmount > 0) && parseAmount(fee) <= 0) {
-      setErr("Enter the monthly fee before recording a payment for this month.");
-      return;
-    }
-    if ((advanceAmount > 0) !== Boolean(advanceFeePaidThrough.trim())) {
-      setErr("Enter both the Ad-Fee amount and its paid-through date.");
-      return;
-    }
-    if (advanceFeePaidThrough.trim() && !isValidDate(advanceFeePaidThrough.trim())) {
+    const studentLoginComplete = Boolean(studentLoginId.trim()) && studentLoginPass.trim().length >= 6;
+    const parentLoginComplete = Boolean(parentLoginId.trim()) && parentLoginPass.trim().length >= 6;
+    const advanceComplete = advanceAmount > 0 && isValidDate(advanceFeePaidThrough.trim());
+    if (advanceAmount > 0 && advanceFeePaidThrough.trim() && !isValidDate(advanceFeePaidThrough.trim())) {
       setErr("Enter the Ad-Fee paid-through date as YYYY-MM-DD.");
       return;
     }
@@ -102,19 +89,19 @@ export default function NewStudent() {
         guardianPhone: guardianPhone.trim() || undefined,
         guardianEmail: guardianEmail.trim() || undefined,
         photoUrl: photo?.dataUrl,
-        studentEmail: studentLoginId.includes("@") ? studentLoginId.trim() : undefined,
-        studentPhone: studentLoginId.trim() && !studentLoginId.includes("@") ? studentLoginId.trim() : undefined,
-        studentPassword: studentLoginId.trim() ? studentLoginPass.trim() : undefined,
-        parentEmail: parentLoginId.includes("@") ? parentLoginId.trim() : undefined,
-        parentPhone: parentLoginId.trim() && !parentLoginId.includes("@") ? parentLoginId.trim() : undefined,
-        parentPassword: parentLoginId.trim() ? parentLoginPass.trim() : undefined,
+        studentEmail: studentLoginComplete && studentLoginId.includes("@") ? studentLoginId.trim() : undefined,
+        studentPhone: studentLoginComplete && !studentLoginId.includes("@") ? studentLoginId.trim() : undefined,
+        studentPassword: studentLoginComplete ? studentLoginPass.trim() : undefined,
+        parentEmail: parentLoginComplete && parentLoginId.includes("@") ? parentLoginId.trim() : undefined,
+        parentPhone: parentLoginComplete && !parentLoginId.includes("@") ? parentLoginId.trim() : undefined,
+        parentPassword: parentLoginComplete ? parentLoginPass.trim() : undefined,
         monthlyFee: fee.trim()
           ? parseAmount(fee)
           : undefined,
-        paidForCurrentMonth: paidThisMonth || paidAmount > 0,
-        paidAmount: paidAmount > 0 ? paidAmount : undefined,
-        advanceFeeAmount: advanceAmount > 0 ? advanceAmount : undefined,
-        advanceFeePaidThrough: advanceAmount > 0 ? advanceFeePaidThrough.trim() : undefined,
+        paidForCurrentMonth: parseAmount(fee) > 0 && (paidThisMonth || paidAmount > 0),
+        paidAmount: parseAmount(fee) > 0 && paidAmount > 0 ? paidAmount : undefined,
+        advanceFeeAmount: advanceComplete ? advanceAmount : undefined,
+        advanceFeePaidThrough: advanceComplete ? advanceFeePaidThrough.trim() : undefined,
         roomId: roomId ?? undefined,
         bedId: bedId ?? undefined,
         joinDate: joinDate.trim() ? joinDate.trim() : undefined,

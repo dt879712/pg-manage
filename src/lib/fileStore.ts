@@ -79,7 +79,7 @@ export interface StoreResult {
   fileUrl: string;
   mimeType: string;
   sizeBytes: number;
-  stored: "cloud" | "inline";
+  stored: "cloud";
 }
 
 interface StoreOptions {
@@ -89,11 +89,8 @@ interface StoreOptions {
 }
 
 /**
- * Store an uploaded file. When Cloudinary is configured the (compressed) bytes
- * are uploaded as an authenticated asset and a portable "cld:<type>:<publicId>"
- * reference is returned — the database keeps the reference, not the payload.
- * When storage is not configured it falls back to the legacy inline base64 data
- * URL so nothing breaks.
+ * Store an uploaded file in Cloudinary. The database only stores the compact
+ * "cld:<type>:<publicId>" reference, never the uploaded bytes.
  */
 export async function storeMedia(
   tenantId: string,
@@ -101,6 +98,13 @@ export async function storeMedia(
   providedMimeType: string | undefined,
   options: StoreOptions
 ): Promise<StoreResult> {
+  if (!mediaStorageConfigured()) {
+    throw Object.assign(
+      new Error("Cloudinary is not configured. Media uploads are paused until storage is set up."),
+      { status: 503 }
+    );
+  }
+
   const { mimeType, buffer } = parseDataUrl(dataUrl);
   let effectiveMime = providedMimeType || mimeType;
   let bytes = buffer;
@@ -115,15 +119,6 @@ export async function storeMedia(
   if (bytes.length > cap) {
     const mb = (cap / (1024 * 1024)).toFixed(1);
     throw Object.assign(new Error(`File exceeds the ${mb} MB limit`), { status: 413 });
-  }
-
-  if (!mediaStorageConfigured()) {
-    return {
-      fileUrl: `data:${effectiveMime};base64,${bytes.toString("base64")}`,
-      mimeType: effectiveMime,
-      sizeBytes: bytes.length,
-      stored: "inline",
-    };
   }
 
   const uploaded = await uploadBuffer(bytes, {
@@ -160,17 +155,45 @@ export async function resolveOptionalUrl(
 }
 
 /**
- * Store a value to Cloudinary only when it is a "data:" URL; otherwise return
- * the value unchanged (already a reference or an external URL).
+ * Store a value in Cloudinary when it is a data URL; pass through a compact
+ * Cloudinary reference or external URL. Reject long raw values so base64 data
+ * cannot accidentally be written into a database media column.
  */
 export async function storeMaybeDataUrl(
   tenantId: string,
   value: string | null | undefined,
   options: StoreOptions
 ): Promise<string | null | undefined> {
-  if (!value || !value.startsWith("data:")) return value;
-  const result = await storeMedia(tenantId, value, undefined, options);
-  return result.fileUrl;
+  if (!value) return value;
+  if (value.startsWith("data:")) {
+    throw Object.assign(new Error("Upload media directly to Cloudinary before saving this record."), {
+      status: 400,
+    });
+  }
+  if (value.length > 2048) {
+    throw Object.assign(new Error("Media URL is too long."), { status: 413 });
+  }
+  if (value.startsWith(CLD_PREFIX)) {
+    validateCloudinaryRef(value, `${options.folder}/${tenantId}`, options.kind);
+    return value;
+  }
+  if (/^https?:\/\//i.test(value)) return value;
+  throw Object.assign(new Error("Media must be uploaded to Cloudinary or supplied as a URL."), {
+    status: 400,
+  });
+}
+
+export function validateCloudinaryRef(
+  value: string,
+  expectedFolderPrefix: string,
+  expectedKind: MediaKind
+): string {
+  if (!value.startsWith(`${CLD_PREFIX}${expectedKind}:${expectedFolderPrefix}/`)) {
+    throw Object.assign(new Error("Cloudinary file does not belong to this PG or upload."), {
+      status: 403,
+    });
+  }
+  return value;
 }
 
 export async function deleteMedia(fileUrl: string | null | undefined): Promise<void> {

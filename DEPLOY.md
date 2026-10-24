@@ -108,3 +108,19 @@ The API container applies the `web_push_subscriptions` migration at startup.
 After setting the keys and deploying the API and web site, users can enable
 alerts in Profile. iPhone/iPad users need iOS/iPadOS 16.4 or newer and must
 open the site from its Home Screen app before enabling notifications.
+
+## Database storage protection and media
+
+- The API checks PostgreSQL size before writes and pauses new writes at 450 MB, leaving a 50 MB
+  buffer below a 500 MB database quota. Deletes remain available for cleanup. `/health` checks
+  database connectivity and reports unhealthy when it cannot query PostgreSQL.
+- Set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` on the API service.
+  The app gets a short-lived signature, then sends photos, documents, gallery images, QR codes,
+  and status videos directly from the device to Cloudinary. Render handles only the signature,
+  verification, and small database reference; it does not relay uploaded file bytes. The database
+  keeps only a short Cloudinary reference. Uploads stop until all three settings are present, and
+  media is never silently stored as base64 in PostgreSQL.
+- If earlier uploads were stored inline as base64, back them up and then run
+  `npm run media:migrate-inline` from a trusted environment with the production `DATABASE_URL`
+  and Cloudinary variables set. The script replaces each database value only after its upload
+  succeeds. It does not delete Cloudinary objects or alter other records.

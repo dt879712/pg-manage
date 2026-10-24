@@ -8,8 +8,8 @@ import {
   storeMaybeDataUrl,
   resolveOptionalUrl,
   resolveMediaUrl,
-  storeMedia,
   deleteMedia,
+  validateCloudinaryRef,
 } from "../lib/fileStore";
 
 export const tenantRouter = Router();
@@ -262,16 +262,13 @@ tenantRouter.patch("/", requireRole("OWNER"), async (req, res, next) => {
 tenantRouter.post("/images", requireRole("OWNER"), async (req, res, next) => {
   try {
     const body = z
-      .object({ dataUrl: z.string().min(1), caption: z.string().optional() })
+      .object({ fileUrl: z.string().min(1), caption: z.string().optional() })
       .parse(req.body);
     const tenantId = req.user!.tenantId!;
     const count = await prisma.tenantImage.count({ where: { tenantId } });
-    const stored = await storeMedia(tenantId, body.dataUrl, undefined, {
-      kind: "image",
-      folder: "branding",
-    });
+    const fileUrl = validateCloudinaryRef(body.fileUrl, `branding/gallery/${tenantId}`, "image");
     const image = await prisma.tenantImage.create({
-      data: { tenantId, imageUrl: stored.fileUrl, caption: body.caption, order: count },
+      data: { tenantId, imageUrl: fileUrl, caption: body.caption, order: count },
     });
     res.status(201).json({ image: { ...image, imageUrl: await resolveMediaUrl(image.imageUrl) } });
   } catch (err) {

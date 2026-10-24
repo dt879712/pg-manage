@@ -6,7 +6,7 @@ import { requireAuth, requireRole } from "../middleware/auth";
 import { requireTenant } from "../middleware/tenant";
 import { sendPushToUsers } from "../lib/push";
 import { mailConfigured, sendMail } from "../lib/mail";
-import { storeMedia, resolveMediaUrl } from "../lib/fileStore";
+import { resolveMediaUrl, validateCloudinaryRef } from "../lib/fileStore";
 import { ensureGuardianParent } from "../lib/guardian";
 import { reconcileAdvanceFees } from "../lib/advanceFees";
 
@@ -17,29 +17,39 @@ export const admissionsRouter = Router();
 
 const ownerGuard = [requireAuth, requireTenant, requireRole("OWNER")];
 
+const emptyToUndefined = (value: unknown) =>
+  typeof value === "string" && value.trim() === "" ? undefined : value;
+const optionalText = z.preprocess(emptyToUndefined, z.string().optional());
+const optionalEmail = z.preprocess(emptyToUndefined, z.string().email().optional());
+const optionalDate = z.preprocess(emptyToUndefined, z.coerce.date().optional());
+const optionalPositiveAmount = z.preprocess(
+  emptyToUndefined,
+  z.number().int().positive().optional()
+);
+
 const documentInput = z.object({
   type: z.enum(["ID_PROOF", "PHOTO", "AGREEMENT", "OTHER"]).default("OTHER"),
   title: z.string().optional(),
   side: z.enum(["front", "back"]).optional(),
-  dataUrl: z.string().min(1),
+  fileUrl: z.string().min(1),
   mimeType: z.string().optional(),
 });
 
 const applyBody = z.object({
   firstName: z.string().min(1),
-  lastName: z.string().optional(),
+  lastName: optionalText,
   gender: z.enum(["MALE", "FEMALE", "OTHER"]).optional(),
-  dob: z.coerce.date().optional(),
+  dob: optionalDate,
   phone: z.string().min(4),
   email: z.string().email(),
-  address: z.string().optional(),
-  course: z.string().optional(),
-  college: z.string().optional(),
-  note: z.string().optional(),
-  guardianName: z.string().optional(),
-  guardianPhone: z.string().optional(),
-  guardianEmail: z.string().email().optional(),
-  guardianPassword: z.string().min(6).optional(),
+  address: optionalText,
+  course: optionalText,
+  college: optionalText,
+  note: optionalText,
+  guardianName: optionalText,
+  guardianPhone: optionalText,
+  guardianEmail: optionalEmail,
+  guardianPassword: z.preprocess(emptyToUndefined, z.string().min(6).optional()),
   password: z.string().min(6),
   documents: z.array(documentInput).min(1),
 });
@@ -137,25 +147,13 @@ admissionsRouter.post("/", async (req, res, next) => {
       ? await hashPassword(body.guardianPassword)
       : null;
 
-    let storedDocuments;
-    try {
-      storedDocuments = await Promise.all(
-        body.documents.map(async (d) => {
-          const result = await storeMedia(tenant.id, d.dataUrl, d.mimeType, {
-            kind: "image",
-            folder: "admissions",
-          });
-          return { type: d.type, title: d.title, side: d.side, fileUrl: result.fileUrl, mimeType: result.mimeType };
-        })
-      );
-    } catch (err) {
-      const status = (err as { status?: number }).status;
-      if (status) {
-        res.status(status).json({ error: (err as Error).message });
-        return;
-      }
-      throw err;
-    }
+    const storedDocuments = body.documents.map((d) => ({
+      type: d.type,
+      title: d.title,
+      side: d.side,
+      fileUrl: validateCloudinaryRef(d.fileUrl, `admissions/${tenant.id}`, "image"),
+      mimeType: d.mimeType,
+    }));
 
     const request = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -315,16 +313,12 @@ admissionsRouter.post("/:id/approve", ...ownerGuard, async (req, res, next) => {
         bedId: z.string().optional(),
         monthlyFee: z.number().int().nonnegative().optional(),
         paidForCurrentMonth: z.boolean().optional(),
-        paidAmount: z.number().int().positive().optional(),
-        advanceFeeAmount: z.number().int().positive().optional(),
-        advanceFeePaidThrough: z.coerce.date().optional(),
+        paidAmount: optionalPositiveAmount,
+        advanceFeeAmount: optionalPositiveAmount,
+        advanceFeePaidThrough: optionalDate,
       })
       .parse(req.body ?? {});
 
-    if (Boolean(body.advanceFeeAmount) !== Boolean(body.advanceFeePaidThrough)) {
-      res.status(400).json({ error: "Enter both the advance-fee amount and its paid-through date." });
-      return;
-    }
     if (body.advanceFeePaidThrough) {
       const paidThroughDay = new Date(body.advanceFeePaidThrough);
       paidThroughDay.setUTCHours(0, 0, 0, 0);

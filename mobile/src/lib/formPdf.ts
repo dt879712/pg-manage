@@ -261,7 +261,7 @@ async function exportPdfOnWeb(html: string, filename: string): Promise<void> {
       html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
       jsPDF: { unit: "pt", format: "a4", orientation: "portrait" },
       pagebreak: { mode: ["css", "legacy"] },
-    })
+    } as any)
     .from(html);
 
   // Inside the desktop app the page runs in a Tauri webview, where a plain

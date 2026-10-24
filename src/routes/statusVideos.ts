@@ -7,10 +7,10 @@ import { requireTenant } from "../middleware/tenant";
 import { getStudentForUser, getParentStudentIds } from "../lib/scope";
 import { sendPushToUsers } from "../lib/push";
 import {
-  storeMedia,
   resolveMediaUrl,
   deleteMedia,
   mediaStorageConfigured,
+  validateCloudinaryRef,
 } from "../lib/fileStore";
 
 export const statusVideosRouter = Router();
@@ -47,10 +47,11 @@ statusVideosRouter.post("/", requireRole(...recorderRoles), async (req, res, nex
     const tenantId = req.user!.tenantId!;
     const body = z
       .object({
-        dataUrl: z.string().min(1),
+        fileUrl: z.string().min(1),
         direction: directionEnum,
         studentId: z.string().optional(),
         mimeType: z.string().optional(),
+        sizeBytes: z.number().int().positive().max(25 * 1024 * 1024).optional(),
       })
       .parse(req.body);
 
@@ -75,12 +76,13 @@ statusVideosRouter.post("/", requireRole(...recorderRoles), async (req, res, nex
       return;
     }
 
-    let stored;
+    let fileUrl: string;
     try {
-      stored = await storeMedia(tenantId, body.dataUrl, body.mimeType ?? "video/mp4", {
-        kind: "video",
-        folder: `status-videos/${student.id}`,
-      });
+      fileUrl = validateCloudinaryRef(
+        body.fileUrl,
+        `status-videos/${student.id}/${tenantId}`,
+        "video"
+      );
     } catch (err) {
       const status = (err as { status?: number }).status;
       if (status) {
@@ -111,9 +113,9 @@ statusVideosRouter.post("/", requireRole(...recorderRoles), async (req, res, nex
           tenantId,
           studentId: student.id,
           direction: body.direction,
-          objectKey: stored.fileUrl,
-          mimeType: stored.mimeType,
-          sizeBytes: stored.sizeBytes,
+          objectKey: fileUrl,
+          mimeType: body.mimeType ?? "video/mp4",
+          sizeBytes: body.sizeBytes,
           recordedById: req.user!.sub,
         },
       });

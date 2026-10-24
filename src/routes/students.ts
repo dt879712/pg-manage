@@ -15,37 +15,58 @@ export const studentsRouter = Router();
 // Student personal data is Owner-only. Staff never sees it.
 studentsRouter.use(requireAuth, requireTenant, requireRole("OWNER"));
 
+// Optional form fields are often submitted as empty strings by mobile clients.
+// Normalize those to undefined before validating dates, emails, and text.
+const emptyToUndefined = (value: unknown) =>
+  typeof value === "string" && value.trim() === "" ? undefined : value;
+const optionalText = z.preprocess(emptyToUndefined, z.string().optional());
+const optionalEmail = z.preprocess(emptyToUndefined, z.string().email().optional());
+const optionalDate = z.preprocess(emptyToUndefined, z.coerce.date().optional());
+const optionalPassword = z.preprocess(emptyToUndefined, z.string().min(6).optional());
+const optionalFeeAmount = z.preprocess(
+  emptyToUndefined,
+  z.number().int().positive().optional()
+);
+const optionalMonthlyFee = z.preprocess(
+  emptyToUndefined,
+  z.number().int().nonnegative().nullable().optional()
+);
+const optionalPaymentAmount = z.preprocess(
+  emptyToUndefined,
+  z.number().int().positive().optional()
+);
+
 const studentBody = z.object({
   firstName: z.string().min(1),
-  lastName: z.string().optional(),
+  lastName: optionalText,
   gender: z.enum(["MALE", "FEMALE", "OTHER"]).optional(),
-  dob: z.coerce.date().optional(),
-  phone: z.string().optional(),
-  email: z.string().email().optional(),
-  address: z.string().optional(),
-  photoUrl: z.string().optional(),
-  guardianName: z.string().optional(),
-  guardianPhone: z.string().optional(),
-  guardianEmail: z.string().optional(),
-  monthlyFee: z.number().int().nonnegative().nullable().optional(),
-  roomId: z.string().optional(),
-  bedId: z.string().optional(),
-  joinDate: z.coerce.date().optional(),
+  dob: optionalDate,
+  phone: optionalText,
+  email: optionalEmail,
+  address: optionalText,
+  photoUrl: optionalText,
+  guardianName: optionalText,
+  guardianPhone: optionalText,
+  guardianEmail: optionalText,
+  monthlyFee: optionalMonthlyFee,
+  roomId: optionalText,
+  bedId: optionalText,
+  joinDate: optionalDate,
 });
 
 const studentCreateBody = studentBody.extend({
   paidForCurrentMonth: z.boolean().optional(),
-  paidAmount: z.number().int().positive().optional(),
-  advanceFeeAmount: z.number().int().positive().optional(),
-  advanceFeePaidThrough: z.coerce.date().optional(),
+  paidAmount: optionalPaymentAmount,
+  advanceFeeAmount: optionalFeeAmount,
+  advanceFeePaidThrough: optionalDate,
   // Optional logins created together with the student. When supplied, the
   // student and guardian accounts are created and linked in the same step.
-  studentEmail: z.string().email().optional(),
-  studentPhone: z.string().optional(),
-  studentPassword: z.string().min(6).optional(),
-  parentEmail: z.string().email().optional(),
-  parentPhone: z.string().optional(),
-  parentPassword: z.string().min(6).optional(),
+  studentEmail: optionalEmail,
+  studentPhone: optionalText,
+  studentPassword: optionalPassword,
+  parentEmail: optionalEmail,
+  parentPhone: optionalText,
+  parentPassword: optionalPassword,
 });
 
 async function resolvePlacement(
@@ -137,11 +158,7 @@ studentsRouter.post("/", async (req, res, next) => {
     const tenantId = req.user!.tenantId!;
     const body = studentCreateBody.parse(req.body);
 
-    if (Boolean(body.advanceFeeAmount) !== Boolean(body.advanceFeePaidThrough)) {
-      res.status(400).json({ error: "Enter both the advance-fee amount and its paid-through date." });
-      return;
-    }
-    if (body.advanceFeePaidThrough) {
+    if (body.advanceFeeAmount && body.advanceFeePaidThrough) {
       const paidThroughDay = new Date(body.advanceFeePaidThrough);
       paidThroughDay.setUTCHours(0, 0, 0, 0);
       const today = new Date();

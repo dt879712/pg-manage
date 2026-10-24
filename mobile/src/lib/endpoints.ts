@@ -25,6 +25,82 @@ import type {
   UserDetail,
 } from "./types";
 
+type DirectUploadPurpose =
+  | "student-photo"
+  | "user-photo"
+  | "document"
+  | "tenant-branding"
+  | "tenant-gallery"
+  | "status-video"
+  | "admission-document";
+
+type DirectUploadOptions = {
+  purpose: DirectUploadPurpose;
+  dataUrl: string;
+  studentId?: string;
+  userId?: string;
+  publicAdmission?: boolean;
+};
+
+async function uploadMediaDirect(input: DirectUploadOptions): Promise<{ fileUrl: string; mimeType: string; sizeBytes: number }> {
+  const publicAdmission = input.publicAdmission === true;
+  const signaturePath = publicAdmission ? "/media/admission/sign" : "/media/sign";
+  const confirmPath = publicAdmission ? "/media/admission/confirm" : "/media/confirm";
+  const target = {
+    purpose: input.purpose,
+    ...(input.studentId ? { studentId: input.studentId } : {}),
+    ...(input.userId ? { userId: input.userId } : {}),
+  };
+  const signature = await api<{
+    cloudName: string;
+    apiKey: string;
+    resourceType: "image" | "video";
+    folder: string;
+    publicId: string;
+    timestamp: number;
+    type: string;
+    signature: string;
+  }>(signaturePath, {
+    method: "POST",
+    body: target,
+    auth: !publicAdmission,
+  });
+
+  const form = new FormData();
+  form.append("file", input.dataUrl);
+  form.append("api_key", signature.apiKey);
+  form.append("timestamp", String(signature.timestamp));
+  form.append("signature", signature.signature);
+  form.append("type", signature.type);
+  form.append("folder", signature.folder);
+  form.append("public_id", signature.publicId);
+
+  const uploadResponse = await fetch(
+    `https://api.cloudinary.com/v1_1/${encodeURIComponent(signature.cloudName)}/${signature.resourceType}/upload`,
+    { method: "POST", body: form }
+  );
+  const uploadResult = await uploadResponse.json().catch(() => null);
+  if (!uploadResponse.ok || typeof uploadResult?.public_id !== "string") {
+    throw new Error(uploadResult?.error?.message ?? "Could not upload this file to Cloudinary.");
+  }
+
+  const confirmed = await api<{ fileUrl: string; mimeType: string; sizeBytes: number }>(confirmPath, {
+    method: "POST",
+    body: { ...target, publicId: uploadResult.public_id },
+    auth: !publicAdmission,
+  });
+  return confirmed;
+}
+
+async function mediaReference(
+  value: unknown,
+  purpose: DirectUploadPurpose,
+  extra: Pick<DirectUploadOptions, "studentId" | "userId" | "publicAdmission"> = {}
+): Promise<unknown> {
+  if (typeof value !== "string" || !value.startsWith("data:")) return value;
+  return (await uploadMediaDirect({ ...extra, purpose, dataUrl: value })).fileUrl;
+}
+
 export function getProperties() {
   return api<{ properties: Property[] }>("/properties");
 }
@@ -117,7 +193,11 @@ export function getUser(id: string) {
 }
 
 export function updateUser(id: string, body: Record<string, unknown>) {
-  return api<{ user: UserDetail }>(`/users/${id}`, { method: "PATCH", body });
+  return (async () => {
+    const next = { ...body };
+    if ("photoUrl" in next) next.photoUrl = await mediaReference(next.photoUrl, "user-photo");
+    return api<{ user: UserDetail }>(`/users/${id}`, { method: "PATCH", body: next });
+  })();
 }
 
 export function deleteUser(id: string) {
@@ -151,11 +231,18 @@ export interface CreateStudentInput {
 }
 
 export function createStudent(input: CreateStudentInput) {
-  return api<{ student: Student }>("/students", { method: "POST", body: input });
+  return (async () => {
+    const body = { ...input, photoUrl: await mediaReference(input.photoUrl, "student-photo") as string | undefined };
+    return api<{ student: Student }>("/students", { method: "POST", body });
+  })();
 }
 
 export function updateStudent(id: string, body: Record<string, unknown>) {
-  return api<{ student: Student }>(`/students/${id}`, { method: "PATCH", body });
+  return (async () => {
+    const next = { ...body };
+    if ("photoUrl" in next) next.photoUrl = await mediaReference(next.photoUrl, "student-photo");
+    return api<{ student: Student }>(`/students/${id}`, { method: "PATCH", body: next });
+  })();
 }
 
 export function uploadDocument(input: {
@@ -167,7 +254,19 @@ export function uploadDocument(input: {
   dataUrl: string;
   mimeType?: string;
 }) {
-  return api<{ document: DocumentFile }>("/documents", { method: "POST", body: input });
+  return (async () => {
+    const uploaded = await uploadMediaDirect({
+      purpose: "document",
+      dataUrl: input.dataUrl,
+      studentId: input.studentId,
+      userId: input.userId,
+    });
+    const { dataUrl: _dataUrl, ...metadata } = input;
+    return api<{ document: DocumentFile }>("/documents", {
+      method: "POST",
+      body: { ...metadata, fileUrl: uploaded.fileUrl },
+    });
+  })();
 }
 
 export function deleteDocument(id: string) {
@@ -185,11 +284,22 @@ export function getTenant() {
 }
 
 export function updateTenant(body: Record<string, unknown>) {
-  return api<{ tenant: TenantBranding }>("/tenant", { method: "PATCH", body });
+  return (async () => {
+    const next = { ...body };
+    if ("logoUrl" in next) next.logoUrl = await mediaReference(next.logoUrl, "tenant-branding");
+    if ("upiQrUrl" in next) next.upiQrUrl = await mediaReference(next.upiQrUrl, "tenant-branding");
+    return api<{ tenant: TenantBranding }>("/tenant", { method: "PATCH", body: next });
+  })();
 }
 
 export function addTenantImage(input: { dataUrl: string; caption?: string }) {
-  return api<{ image: TenantImage }>("/tenant/images", { method: "POST", body: input });
+  return (async () => {
+    const uploaded = await uploadMediaDirect({ purpose: "tenant-gallery", dataUrl: input.dataUrl });
+    return api<{ image: TenantImage }>("/tenant/images", {
+      method: "POST",
+      body: { fileUrl: uploaded.fileUrl, caption: input.caption },
+    });
+  })();
 }
 
 export function deleteTenantImage(id: string) {
@@ -264,11 +374,22 @@ export interface ApplyAdmissionInput {
 }
 
 export function submitAdmission(input: ApplyAdmissionInput) {
-  return api<{ admission: { id: string; status: string } }>("/admissions", {
-    method: "POST",
-    body: input,
-    auth: false,
-  });
+  return (async () => {
+    const documents = await Promise.all(input.documents.map(async (document) => {
+      const uploaded = await uploadMediaDirect({
+        purpose: "admission-document",
+        dataUrl: document.dataUrl,
+        publicAdmission: true,
+      });
+      const { dataUrl: _dataUrl, ...metadata } = document;
+      return { ...metadata, fileUrl: uploaded.fileUrl };
+    }));
+    return api<{ admission: { id: string; status: string } }>("/admissions", {
+      method: "POST",
+      body: { ...input, documents },
+      auth: false,
+    });
+  })();
 }
 
 export function getAdmissionStatus(email: string, phone: string) {
@@ -393,9 +514,20 @@ export async function uploadStatusVideo(input: {
     reader.onerror = () => reject(new Error("Could not read the recording"));
     reader.readAsDataURL(blob);
   });
+  const uploaded = await uploadMediaDirect({
+    purpose: "status-video",
+    dataUrl,
+    studentId: input.studentId,
+  });
   return api<{ video: StatusVideo }>("/status-videos", {
     method: "POST",
-    body: { dataUrl, studentId: input.studentId, direction: input.direction, mimeType },
+    body: {
+      fileUrl: uploaded.fileUrl,
+      sizeBytes: uploaded.sizeBytes,
+      studentId: input.studentId,
+      direction: input.direction,
+      mimeType,
+    },
   });
 }
 

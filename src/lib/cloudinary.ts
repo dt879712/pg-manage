@@ -26,6 +26,30 @@ export function isCloudinaryConfigured(): boolean {
   return cloudinaryConfigured();
 }
 
+/** Create a short-lived signed upload without sending file bytes through this API. */
+export function signDirectUpload(params: Record<string, string | number>): string {
+  ensureConfig();
+  return cloudinary.utils.api_sign_request(params, env.cloudinaryApiSecret);
+}
+
+/** Verify a direct upload with Cloudinary before its reference is saved in PostgreSQL. */
+export async function inspectUploadedAsset(
+  publicId: string,
+  resourceType: CloudResourceType
+): Promise<{ publicId: string; resourceType: string; type: string; bytes: number }> {
+  ensureConfig();
+  const asset = await cloudinary.api.resource(publicId, {
+    resource_type: resourceType,
+    type: "authenticated",
+  });
+  return {
+    publicId: String(asset.public_id),
+    resourceType: String(asset.resource_type),
+    type: String(asset.type),
+    bytes: Number(asset.bytes ?? 0),
+  };
+}
+
 export interface UploadResult {
   publicId: string;
   resourceType: CloudResourceType;
