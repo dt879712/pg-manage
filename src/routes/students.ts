@@ -9,6 +9,7 @@ import { parsePagination } from "../lib/pagination";
 import { storeMaybeDataUrl, resolveOptionalUrl, resolveMediaUrl } from "../lib/fileStore";
 import { accountEmailFor } from "../lib/guardian";
 import { reconcileAdvanceFees } from "../lib/advanceFees";
+import { purgeDisabledAccountsForIdentifiers } from "../lib/accountDeletion";
 
 export const studentsRouter = Router();
 
@@ -178,10 +179,15 @@ studentsRouter.post("/", async (req, res, next) => {
       res.status(400).json({ error: "The student and parent need different mobile numbers or emails." });
       return;
     }
-    for (const id of [
+    const loginIdentifiers = [
       { label: "Student", email: body.studentEmail?.trim().toLowerCase(), phone: body.studentPhone?.trim() },
       { label: "Parent", email: body.parentEmail?.trim().toLowerCase(), phone: body.parentPhone?.trim() },
-    ]) {
+    ];
+    await purgeDisabledAccountsForIdentifiers(tenantId, {
+      emails: loginIdentifiers.flatMap((id) => id.email ? [accountEmailFor(id.email, undefined)] : []),
+      phones: loginIdentifiers.flatMap((id) => id.phone ? [id.phone] : []),
+    });
+    for (const id of loginIdentifiers) {
       const where = [
         ...(id.email ? [{ email: accountEmailFor(id.email, undefined) }] : []),
         ...(id.phone ? [{ phone: id.phone }] : []),

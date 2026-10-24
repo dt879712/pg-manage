@@ -6,8 +6,9 @@ import { hashPassword } from "../auth";
 import { generateTempPassword } from "../lib/password";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { requireTenant } from "../middleware/tenant";
-import { storeMaybeDataUrl, resolveOptionalUrl, resolveMediaUrl, deleteMedia } from "../lib/fileStore";
+import { storeMaybeDataUrl, resolveOptionalUrl, resolveMediaUrl } from "../lib/fileStore";
 import { ensureGuardianParent } from "../lib/guardian";
+import { permanentlyDeleteUserAccount, purgeDisabledAccountsForIdentifiers } from "../lib/accountDeletion";
 
 export const usersRouter = Router();
 
@@ -139,6 +140,10 @@ usersRouter.post("/parents", async (req, res, next) => {
 
     const email = accountEmail(body.email, body.phone);
     const phone = body.phone?.trim();
+    await purgeDisabledAccountsForIdentifiers(tenantId, {
+      emails: [email],
+      phones: phone ? [phone] : [],
+    });
     let parent = await prisma.user.findFirst({
       where: {
         tenantId,
@@ -211,6 +216,10 @@ usersRouter.post("/students", async (req, res, next) => {
       return;
     }
     const email = accountEmail(body.email, body.phone ?? student.phone ?? undefined);
+    await purgeDisabledAccountsForIdentifiers(tenantId, {
+      emails: [email],
+      phones: [body.phone ?? student.phone ?? ""],
+    });
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       res.status(409).json({ error: "That login is already registered" });
@@ -355,47 +364,10 @@ usersRouter.delete("/:id", async (req, res, next) => {
       return;
     }
 
-    const student = await prisma.student.findFirst({
-      where: { userId: existing.id, tenantId },
-      select: {
-        id: true,
-        photoUrl: true,
-        documents: { select: { fileUrl: true } },
-        statusVideos: { select: { objectKey: true } },
-      },
-    });
-    const admissionRequests = await prisma.admissionRequest.findMany({
-      where: { userId: existing.id, tenantId },
-      select: { id: true, documents: { select: { fileUrl: true } } },
-    });
-    const userDocuments = await prisma.document.findMany({
-      where: { tenantId, userId: existing.id },
-      select: { fileUrl: true },
-    });
-    const mediaToDelete = [
-      existing.photoUrl,
-      student?.photoUrl,
-      ...(student?.documents.map((document) => document.fileUrl) ?? []),
-      ...(student?.statusVideos.map((video) => video.objectKey) ?? []),
-      ...admissionRequests.flatMap((request) => request.documents.map((document) => document.fileUrl)),
-      ...userDocuments.map((document) => document.fileUrl),
-    ];
-
     // Remove the linked student/admission records in the same transaction so
     // their phone/email and all dependent database rows are genuinely freed.
-    // A student account deletion permanently removes the student profile,
-    // invoices, payments, attendance, advance fees, documents and videos too.
-    await prisma.$transaction(async (tx) => {
-      if (student) await tx.student.delete({ where: { id: student.id } });
-      if (admissionRequests.length) {
-        await tx.admissionRequest.deleteMany({ where: { userId: existing.id, tenantId } });
-      }
-      await tx.user.delete({ where: { id: existing.id } });
-    });
-
-    // Cloudinary assets are deleted after the database commit. Storage failures
-    // do not roll back the permanent database deletion.
-    await Promise.all(mediaToDelete.map((media) => deleteMedia(media)));
+    // Student deletion also removes fees, payments, attendance, and documents.
+    await permanentlyDeleteUserAccount(existing.id, tenantId);
     res.json({ ok: true });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
