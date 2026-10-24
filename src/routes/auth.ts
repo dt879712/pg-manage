@@ -156,7 +156,12 @@ authRouter.get("/me", requireAuth, async (req, res, next) => {
     }
     // The active branch is whichever one the current session token is scoped
     // to. The stored value is only the last branch picked at login/switch time.
-    res.json({ user: { ...user, tenantId: req.user!.tenantId ?? user.tenantId } });
+    // Refresh valid sessions so existing installations receive the longer
+    // expiry without requiring a new login.
+    res.json({
+      user: { ...user, tenantId: req.user!.tenantId ?? user.tenantId },
+      token: signToken({ sub: req.user!.sub, tenantId: req.user!.tenantId, role: req.user!.role }),
+    });
   } catch (err) {
     next(err);
   }
