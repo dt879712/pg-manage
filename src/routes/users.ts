@@ -6,7 +6,7 @@ import { hashPassword } from "../auth";
 import { generateTempPassword } from "../lib/password";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { requireTenant } from "../middleware/tenant";
-import { storeMaybeDataUrl, resolveOptionalUrl, resolveMediaUrl } from "../lib/fileStore";
+import { storeMaybeDataUrl, resolveOptionalUrl, resolveMediaUrl, deleteMedia } from "../lib/fileStore";
 import { ensureGuardianParent } from "../lib/guardian";
 
 export const usersRouter = Router();
@@ -342,8 +342,9 @@ usersRouter.patch("/:id", async (req, res, next) => {
 
 usersRouter.delete("/:id", async (req, res, next) => {
   try {
+    const tenantId = req.user!.tenantId!;
     const existing = await prisma.user.findFirst({
-      where: { id: req.params.id as string, tenantId: req.user!.tenantId! },
+      where: { id: req.params.id as string, tenantId },
     });
     if (!existing) {
       res.status(404).json({ error: "Not found" });
@@ -353,19 +354,54 @@ usersRouter.delete("/:id", async (req, res, next) => {
       res.status(400).json({ error: "Cannot delete owner" });
       return;
     }
-    try {
-      await prisma.user.delete({ where: { id: existing.id } });
-    } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
-        res.status(409).json({
-          error: "This account is linked to other records. Disable it instead of deleting.",
-        });
-        return;
+
+    const student = await prisma.student.findFirst({
+      where: { userId: existing.id, tenantId },
+      select: {
+        id: true,
+        photoUrl: true,
+        documents: { select: { fileUrl: true } },
+        statusVideos: { select: { objectKey: true } },
+      },
+    });
+    const admissionRequests = await prisma.admissionRequest.findMany({
+      where: { userId: existing.id, tenantId },
+      select: { id: true, documents: { select: { fileUrl: true } } },
+    });
+    const userDocuments = await prisma.document.findMany({
+      where: { tenantId, userId: existing.id },
+      select: { fileUrl: true },
+    });
+    const mediaToDelete = [
+      existing.photoUrl,
+      student?.photoUrl,
+      ...(student?.documents.map((document) => document.fileUrl) ?? []),
+      ...(student?.statusVideos.map((video) => video.objectKey) ?? []),
+      ...admissionRequests.flatMap((request) => request.documents.map((document) => document.fileUrl)),
+      ...userDocuments.map((document) => document.fileUrl),
+    ];
+
+    // Remove the linked student/admission records in the same transaction so
+    // their phone/email and all dependent database rows are genuinely freed.
+    // A student account deletion permanently removes the student profile,
+    // invoices, payments, attendance, advance fees, documents and videos too.
+    await prisma.$transaction(async (tx) => {
+      if (student) await tx.student.delete({ where: { id: student.id } });
+      if (admissionRequests.length) {
+        await tx.admissionRequest.deleteMany({ where: { userId: existing.id, tenantId } });
       }
-      throw err;
-    }
+      await tx.user.delete({ where: { id: existing.id } });
+    });
+
+    // Cloudinary assets are deleted after the database commit. Storage failures
+    // do not roll back the permanent database deletion.
+    await Promise.all(mediaToDelete.map((media) => deleteMedia(media)));
     res.json({ ok: true });
   } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+      res.status(409).json({ error: "Could not remove every linked record. No account data was deleted." });
+      return;
+    }
     next(err);
   }
 });

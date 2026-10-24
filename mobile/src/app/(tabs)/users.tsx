@@ -75,8 +75,8 @@ function UsersView() {
       title: `Delete ${u.name}?`,
       message:
         u.role === "STUDENT"
-          ? "Their login will be removed. The student record stays and a new login can be created later."
-          : "They will no longer be able to sign in. Records they created stay in the system.",
+          ? "This permanently deletes their login and student record, including fees, payments, attendance, documents, and videos. Their mobile number can then be used for a new account. This cannot be undone."
+          : "This permanently deletes their login and personal account data. Their mobile number can then be used for a new account. This cannot be undone.",
       confirmLabel: "Delete",
       destructive: true,
     });
